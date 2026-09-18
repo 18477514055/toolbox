@@ -67,6 +67,7 @@ internal sealed partial class SettingsWindow : Window
         CloseBtn.Click += (_, _) => Close();
         OpenDataBtn.Click += (_, _) => OpenPath(AppPaths.Root);
         OpenLogBtn.Click += (_, _) => OpenPath(AppPaths.LogDir);
+        ManageToolsBtn.Click += (_, _) => OpenToolStore();
         SofficeBrowseBtn.Click += (_, _) => BrowseFile(
             SofficeBox, "选择 soffice.exe", "可执行文件|*.exe|所有文件|*.*");
         ScreenshotDirBrowseBtn.Click += (_, _) => BrowseFolder(ScreenshotDirBox);
@@ -86,6 +87,36 @@ internal sealed partial class SettingsWindow : Window
         UpdateToolSwitchHint();
 
         Loaded += async (_, _) => await RefreshOllamaHintAsync();
+    }
+
+    // ---------------------------------------------------------------- 工具管理
+
+    private Toolbox.Tools.Store.ToolStoreWindow? _storeWindow;
+
+    /// <summary>
+    /// 打开「工具管理」窗口（按需下载入口）。
+    ///
+    /// 单例：重复点不叠窗口，而是把已有的激活 —— 与其它工具窗口的做法一致。
+    /// </summary>
+    private void OpenToolStore()
+    {
+        try
+        {
+            if (_storeWindow is { IsVisible: true })
+            {
+                _storeWindow.Activate();
+                return;
+            }
+
+            _storeWindow = new Toolbox.Tools.Store.ToolStoreWindow(_ctx);
+            _storeWindow.Closed += (_, _) => _storeWindow = null;
+            _storeWindow.Show();
+            _storeWindow.Activate();
+        }
+        catch (Exception ex)
+        {
+            Log.Exception("打开工具管理窗口失败", ex);
+        }
     }
 
     // ---------------------------------------------------------------- 功能开关

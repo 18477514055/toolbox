@@ -224,6 +224,7 @@
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                             <Button x:Name="OpenDataBtn" Content="打开数据目录" Style="{StaticResource Btn}" />
                             <Button x:Name="OpenLogBtn" Content="打开日志" Style="{StaticResource Btn}" Background="#FF6B7280" />
+                            <Button x:Name="ManageToolsBtn" Content="工具管理（从仓库获取）" Style="{StaticResource Btn}" Background="#FF2970D1" />
                         </StackPanel>
                         <TextBlock Style="{StaticResource Hint}"
                                    Text="剪贴板历史、图片、设置都在这里。它不属于项目源码目录，重装程序不会丢。" />

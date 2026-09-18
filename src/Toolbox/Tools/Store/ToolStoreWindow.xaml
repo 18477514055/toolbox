@@ -1,0 +1,85 @@
+<Window x:Class="Toolbox.Tools.Store.ToolStoreWindow"
+        x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="工具管理（按需下载）"
+        Width="760" Height="600"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="Microsoft YaHei UI, Microsoft YaHei, Segoe UI"
+        Background="#FFF6F7F9">
+
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 顶部说明 + 刷新 -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0" TextWrapping="Wrap" FontSize="12" Foreground="#FF8A94A6"
+                       Text="从工具箱的 GitHub 仓库拉取工具清单。清单会依次尝试直连与国内镜像，下载后按 SHA-256 校验。" />
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button x:Name="RefreshBtn" Content="刷新清单" Width="88" Height="28" />
+            </StackPanel>
+        </Grid>
+
+        <!-- 来源状态 -->
+        <Border Grid.Row="1" Margin="0,10,0,0" Padding="10,8" CornerRadius="4"
+                Background="#FFF0F4FA" BorderBrush="#FFD5DFEE" BorderThickness="1">
+            <StackPanel>
+                <TextBlock x:Name="SourceText" FontSize="12" TextWrapping="Wrap"
+                           Foreground="#FF1F2329" Text="还没拉取清单。点「刷新清单」试试。" />
+                <TextBlock x:Name="SourceHint" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Foreground="#FF8A94A6"
+                           Text="国内网络直连 GitHub 可能不通，工具会依次尝试 ghproxy.net / gh-proxy.com / ghfast.top 等镜像。" />
+            </StackPanel>
+        </Border>
+
+        <!-- 清单列表 -->
+        <DataGrid x:Name="ToolGrid" Grid.Row="2" Margin="0,12,0,0"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  CanUserAddRows="False"
+                  HeadersVisibility="Column"
+                  GridLinesVisibility="Horizontal"
+                  RowHeaderWidth="0"
+                  FontSize="13">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="工具" Binding="{Binding Name}" Width="150" />
+                <DataGridTextColumn Header="说明" Binding="{Binding Description}" Width="*" />
+                <DataGridTextColumn Header="默认键" Binding="{Binding DefaultHotKey}" Width="120" />
+                <DataGridTextColumn Header="来源" Binding="{Binding Origin}" Width="110" />
+                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="150" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- 底部 -->
+        <Grid Grid.Row="3" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                <TextBlock x:Name="StatusText" FontSize="12" TextWrapping="Wrap"
+                           Foreground="#FF1F2329" Text="就绪。" />
+                <ProgressBar x:Name="Progress" Height="6" Margin="0,6,0,0" Minimum="0" Maximum="1"
+                             Visibility="Collapsed" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button x:Name="DownloadBtn" Content="下载/更新选中" Width="118" Height="32" Margin="0,0,8,0" />
+                <Button x:Name="OpenRepoBtn" Content="打开仓库" Width="88" Height="32" Margin="0,0,8,0" />
+                <Button x:Name="CloseBtn" Content="关闭" Width="72" Height="32" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

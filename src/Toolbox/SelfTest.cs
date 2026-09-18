@@ -12,6 +12,7 @@ using Toolbox.Tools.Ai;
 using Toolbox.Tools.BatchRename;
 using Toolbox.Tools.Archiver;
 using Toolbox.Tools.Clipboard;
+using Toolbox.Tools.Store;
 using Toolbox.Tools.CommandRunner;
 using Toolbox.Tools.Convert;
 using Toolbox.Tools.HashCheck;
@@ -89,6 +90,7 @@ internal static class SelfTest
             RunCommandRunnerTests();
             RunArchiveTests();
             RunToolSwitchTests();
+            RunToolStoreTests();
             RunRegistrationTests();
             RunConvertTests();
             RunEnvironmentTests();
@@ -1681,6 +1683,160 @@ internal static class SelfTest
         }
 
         return string.Empty;
+    }
+
+    // ---------------------------------------------------------------- 工具仓库
+
+    /// <summary>
+    /// 「按需下载」链路的用例（**不联网**的那部分）。
+    ///
+    /// 联网部分不放进自检 —— 自检必须能在**完全离线**环境下跑通，
+    /// 否则网络一抖就一片红，用户会以为工具箱坏了。
+    /// 联网链路由 `artifacts\probe-store\` 单独实测：
+    /// 已验真实下载 68 MB + SHA-256 校验通过 + 篡改内容被拒绝。
+    /// </summary>
+    private static void RunToolStoreTests()
+    {
+        // ---- 1. 内置清单必须完整且自洽（离线可用的那份）----
+        try
+        {
+            var m = ToolStore.BuiltInManifest();
+
+            var schemaOk = m.SchemaVersion == 1;
+            var countOk = m.Tools.Count == 12;
+
+            var ids = m.Tools.Select(t => t.Id).ToList();
+            var noDup = ids.Distinct(StringComparer.OrdinalIgnoreCase).Count() == ids.Count;
+
+            var noBlank = m.Tools.All(t =>
+                !string.IsNullOrWhiteSpace(t.Id)
+                && !string.IsNullOrWhiteSpace(t.Name)
+                && !string.IsNullOrWhiteSpace(t.Description));
+
+            var ok = schemaOk && countOk && noDup && noBlank;
+
+            Add("工具仓库：内置清单完整自洽（12 条目 / 无重复 / 无空字段）", ok,
+                ok
+                    ? $"SchemaVersion=1，{m.Tools.Count} 个条目，Id 无重复，字段无空白"
+                    : $"schemaOk={schemaOk} countOk={countOk} noDup={noDup} noBlank={noBlank}");
+        }
+        catch (Exception ex)
+        {
+            Add("工具仓库：内置清单完整自洽（12 条目 / 无重复 / 无空字段）", false, ex.Message);
+        }
+
+        // ---- 2. 清单里的 Id 必须与真实工具一一对应 ----
+        //
+        // 防的是"清单写了个不存在的工具"或"新加了工具却忘了进清单"——
+        // 后者会让工具管理界面漏掉它。
+        try
+        {
+            var manifestIds = ToolStore.BuiltInManifest().Tools
+                .Select(t => t.Id)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var registryIds = BuildFullRegistry().Tools
+                .Select(t => t.Id)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var missingInManifest = registryIds.Except(manifestIds).ToList();
+            var extraInManifest = manifestIds.Except(registryIds).ToList();
+
+            var ok = missingInManifest.Count == 0 && extraInManifest.Count == 0;
+
+            Add("工具仓库：清单 Id 与真实工具一一对应", ok,
+                ok
+                    ? $"{manifestIds.Count} 个 Id 两边完全一致"
+                    : $"清单缺：{string.Join("、", missingInManifest)}；"
+                      + $"清单多：{string.Join("、", extraInManifest)}");
+        }
+        catch (Exception ex)
+        {
+            Add("工具仓库：清单 Id 与真实工具一一对应", false, ex.Message);
+        }
+
+        // ---- 3. 多镜像源配置：直连 + 至少 2 个镜像 ----
+        //
+        // 用户明确要求"国内部分地区无法直连时要留镜像"。
+        // 这条保证以后有人手滑删掉镜像时能被发现。
+        try
+        {
+            var listSources = ToolStore.Sources;
+            var releaseSources = ToolStore.ReleaseSources;
+
+            var listOk = listSources.Count >= 3;
+            var releaseOk = releaseSources.Count >= 3;
+
+            var directFirst = listSources[0].Name.Contains("直连")
+                              && releaseSources[0].Name.Contains("直连");
+
+            var listTemplatesOk = listSources.All(s =>
+                s.Template.Contains("{owner}") && s.Template.Contains("{path}"));
+            var relTemplatesOk = releaseSources.All(s =>
+                s.Template.Contains("{owner}") && s.Template.Contains("{tag}") && s.Template.Contains("{asset}"));
+
+            var ok = listOk && releaseOk && directFirst && listTemplatesOk && relTemplatesOk;
+
+            Add("工具仓库：多镜像源已配置（直连优先 + ≥2 镜像 + 模板占位符）", ok,
+                ok
+                    ? $"清单源 {listSources.Count} 个、下载源 {releaseSources.Count} 个；"
+                      + $"镜像：{string.Join("、", listSources.Skip(1).Select(s => s.Name))}"
+                    : $"listOk={listOk} releaseOk={releaseOk} directFirst={directFirst} "
+                      + $"listTemplatesOk={listTemplatesOk} relTemplatesOk={relTemplatesOk}");
+        }
+        catch (Exception ex)
+        {
+            Add("工具仓库：多镜像源已配置（直连优先 + ≥2 镜像 + 模板占位符）", false, ex.Message);
+        }
+
+        // ---- 4. URL 拼接正确（占位符必须全替换）----
+        try
+        {
+            var direct = ToolStore.Sources[0];
+            var url = ToolStore.BuildUrl(direct, new Dictionary<string, string> { ["path"] = "tools.json" });
+            var directOk = url == "https://raw.githubusercontent.com/18477514055/toolbox/main/tools.json";
+
+            var mirror = ToolStore.Sources.First(s => s.Name == "ghproxy.net");
+            var murl = ToolStore.BuildUrl(mirror, new Dictionary<string, string> { ["path"] = "tools.json" });
+            var mirrorOk = murl.StartsWith("https://ghproxy.net/https://raw.githubusercontent.com/");
+
+            var ok = directOk && mirrorOk;
+            Add("工具仓库：URL 拼接正确（直连与镜像）", ok,
+                ok
+                    ? $"直连：{url}"
+                    : $"directOk={directOk}（{url}） mirrorOk={mirrorOk}（{murl}）");
+        }
+        catch (Exception ex)
+        {
+            Add("工具仓库：URL 拼接正确（直连与镜像）", false, ex.Message);
+        }
+
+        // ---- 5. SHA-256 计算正确（拿公开测试向量验，不是自己跟自己对）----
+        try
+        {
+            Directory.CreateDirectory(AppPaths.SelfTestDir);
+            var temp = Path.Combine(AppPaths.SelfTestDir, "sha-" + Guid.NewGuid().ToString("N") + ".bin");
+
+            // "abc" 的 SHA-256 是公开标准值
+            File.WriteAllBytes(temp, new byte[] { 0x61, 0x62, 0x63 });
+
+            try
+            {
+                var got = ToolStore.ComputeSha256(temp);
+                const string want = "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD";
+
+                Add("工具仓库：SHA-256 计算正确（公开测试向量）", got == want,
+                    got == want ? "与 \"abc\" 的标准哈希一致" : $"实得 {got}（期望 {want}）");
+            }
+            finally
+            {
+                try { File.Delete(temp); } catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            Add("工具仓库：SHA-256 计算正确（公开测试向量）", false, ex.Message);
+        }
     }
 
     // ---------------------------------------------------------------- 功能开关

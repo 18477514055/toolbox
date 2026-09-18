@@ -19,3 +19,6 @@ share/
 # 本地环境
 .vscode/
 .idea/
+
+# 临时备份
+*.bak

@@ -1,0 +1,188 @@
+<Window x:Class="Toolbox.Tools.ImageCrop.ImageCropWindow"
+        x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="图片裁剪 · 桌面工具箱"
+        Width="1080" Height="740"
+        WindowStartupLocation="CenterScreen"
+        Background="#FFF5F6F8"
+        AllowDrop="True"
+        FontFamily="Microsoft YaHei UI, Microsoft YaHei, Segoe UI"
+        TextOptions.TextFormattingMode="Display">
+
+    <Window.Resources>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="12" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <Style x:Key="Sec" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#FF1F2329" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="#FF8A94A6" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,4,0,0" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="12,5" />
+            <Setter Property="Margin" Value="0,4,0,0" />
+            <Setter Property="Background" Value="#FF2970D1" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 来源 -->
+        <Border Grid.Row="0" Style="{StaticResource Card}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="图片来源：" VerticalAlignment="Center" Foreground="#FF4E5969" />
+                <Button x:Name="FromClipboardBtn" Content="用剪贴板里的图片" Margin="10,0,0,0" />
+                <Button x:Name="OpenFileBtn" Content="打开文件…" Margin="8,0,0,0" Background="#FF6B7280" />
+                <Button x:Name="RevertBtn" Content="还原成原图" Margin="8,0,0,0" Background="#FF6B7280" />
+                <TextBlock x:Name="SourceInfo" VerticalAlignment="Center" Margin="14,0,0,0" Foreground="#FF8A94A6" />
+                <TextBlock Text="（也可以直接把图片拖进窗口）" VerticalAlignment="Center" Margin="10,0,0,0"
+                           FontSize="11" Foreground="#FFA8B0BC" />
+            </StackPanel>
+        </Border>
+
+        <!-- 主区 -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="320" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Background="#FF2B2F36" CornerRadius="8" Margin="0,0,10,0" ClipToBounds="True">
+                <Canvas x:Name="Stage" Background="Transparent" ClipToBounds="True">
+                    <Image x:Name="Preview" Stretch="Fill"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
+                    <Rectangle x:Name="SelectionRect"
+                               Stroke="#FF2970D1" StrokeThickness="1.5"
+                               Fill="#332970D1" Visibility="Collapsed" />
+                    <Rectangle x:Name="HandleTL" Width="10" Height="10" Fill="#FF2970D1" Stroke="White" StrokeThickness="1" Visibility="Collapsed" />
+                    <Rectangle x:Name="HandleTR" Width="10" Height="10" Fill="#FF2970D1" Stroke="White" StrokeThickness="1" Visibility="Collapsed" />
+                    <Rectangle x:Name="HandleBL" Width="10" Height="10" Fill="#FF2970D1" Stroke="White" StrokeThickness="1" Visibility="Collapsed" />
+                    <Rectangle x:Name="HandleBR" Width="10" Height="10" Fill="#FF2970D1" Stroke="White" StrokeThickness="1" Visibility="Collapsed" />
+                </Canvas>
+            </Border>
+
+            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+
+                    <!-- 裁剪 -->
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="① 切割裁剪" Style="{StaticResource Sec}" />
+
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="固定比例" VerticalAlignment="Center" Width="66" />
+                                <ComboBox x:Name="RatioBox" Width="180">
+                                    <ComboBoxItem Content="自由" IsSelected="True" />
+                                    <ComboBoxItem Content="1:1" />
+                                    <ComboBoxItem Content="16:9" />
+                                    <ComboBoxItem Content="9:16" />
+                                    <ComboBoxItem Content="4:3" />
+                                    <ComboBoxItem Content="3:4" />
+                                </ComboBox>
+                            </StackPanel>
+
+                            <TextBlock x:Name="SelectionInfo" Style="{StaticResource Hint}"
+                                       Text="在左边的图上按住鼠标拖动，框出要保留的区域。" />
+
+                            <Button x:Name="CropBtn" Content="裁出选区" />
+                            <Button x:Name="SelectAllBtn" Content="全选" Background="#FF6B7280" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 改尺寸 -->
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="② 改变像素尺寸" Style="{StaticResource Sec}" />
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Text="宽 (px)" VerticalAlignment="Center" Width="66" />
+                                <TextBox x:Name="WidthBox" Width="100" />
+                                <TextBlock Text="高 (px)" VerticalAlignment="Center" Width="52" Margin="10,0,0,0" />
+                                <TextBox x:Name="HeightBox" Width="100" />
+                            </StackPanel>
+
+                            <CheckBox x:Name="LockRatioBox" Content="锁定宽高比" IsChecked="True" />
+                            <CheckBox x:Name="PercentBox" Content="按百分比输入（宽/高当百分比用）" Margin="0,6,0,0" />
+
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <TextBlock Text="插值质量" VerticalAlignment="Center" Width="66" />
+                                <ComboBox x:Name="QualityBox" Width="180">
+                                    <ComboBoxItem Content="高质量（平滑）" IsSelected="True" />
+                                    <ComboBoxItem Content="最近邻（保留像素锐利）" />
+                                </ComboBox>
+                            </StackPanel>
+
+                            <Button x:Name="ResizeBtn" Content="应用尺寸" />
+                            <TextBlock Style="{StaticResource Hint}"
+                                       Text="输出像素与输入完全一致（不是「看起来差不多」）。" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 输出 -->
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="③ 另存" Style="{StaticResource Sec}" />
+
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="格式" VerticalAlignment="Center" Width="66" />
+                                <ComboBox x:Name="FormatBox" Width="180" SelectionChanged="OnFormatChanged">
+                                    <ComboBoxItem Content="PNG（无损）" IsSelected="True" />
+                                    <ComboBoxItem Content="JPG（有损，体积小）" />
+                                    <ComboBoxItem Content="BMP（无压缩）" />
+                                </ComboBox>
+                            </StackPanel>
+
+                            <StackPanel x:Name="JpegQualityPanel" Orientation="Horizontal" Margin="0,8,0,0" Visibility="Collapsed">
+                                <TextBlock Text="JPG 质量" VerticalAlignment="Center" Width="66" />
+                                <Slider x:Name="JpegQuality" Width="140" Minimum="30" Maximum="100" Value="90" />
+                                <TextBlock x:Name="JpegQualityLabel" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="#FF8A94A6" Text="90" />
+                            </StackPanel>
+
+                            <Button x:Name="SaveBtn" Content="另存为…" Background="#FF12A150" />
+                            <TextBlock Style="{StaticResource Hint}"
+                                       Text="永远另存，绝不覆盖源文件；同名时自动加 (1)。" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}">
+                        <TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="#FF4E5969"
+                                   Text="等待载入图片。" />
+                    </Border>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <Border Grid.Row="2" Style="{StaticResource Card}">
+            <TextBlock x:Name="SizeText" Foreground="#FF4E5969" Text="—" />
+        </Border>
+    </Grid>
+</Window>

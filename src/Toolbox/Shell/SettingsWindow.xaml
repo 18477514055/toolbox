@@ -1,0 +1,249 @@
+<Window x:Class="Toolbox.Shell.SettingsWindow"
+        x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="桌面工具箱 · 设置"
+        Width="720" Height="720"
+        WindowStartupLocation="CenterScreen"
+        Background="#FFF5F6F8"
+        FontFamily="Microsoft YaHei UI, Microsoft YaHei, Segoe UI"
+        TextOptions.TextFormattingMode="Display">
+
+    <Window.Resources>
+        <Style x:Key="Section" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#FF1F2329" />
+            <Setter Property="Margin" Value="0,18,0,8" />
+        </Style>
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="#FF8A94A6" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,3,0,0" />
+        </Style>
+        <Style x:Key="Row" TargetType="Border">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="Margin" Value="0,0,0,6" />
+        </Style>
+        <Style x:Key="Btn" TargetType="Button">
+            <Setter Property="Padding" Value="12,5" />
+            <Setter Property="Margin" Value="6,0,0,0" />
+            <Setter Property="Background" Value="#FF2970D1" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="18,10,18,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+
+                <TextBlock Text="功能开关" Style="{StaticResource Section}" />
+
+                <Border Style="{StaticResource Row}">
+                    <StackPanel>
+                        <!-- 总开关 -->
+                        <CheckBox x:Name="ToolsEnabledBox" FontWeight="SemiBold"
+                                  Content="启用工具箱（总开关）"
+                                  Checked="OnMasterSwitchChanged" Unchecked="OnMasterSwitchChanged" />
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="关掉之后**所有功能都停止运行**（不注册热键、不监听剪贴板、悬浮窗和托盘也不再显示入口），但程序本身还在，随时可以在设置里重新打开。" />
+
+                        <!-- 每个工具的开关（运行时由代码按注册表生成） -->
+                        <Border Background="#FFF7F8FA" CornerRadius="6" Padding="10,8" Margin="0,10,0,0">
+                            <StackPanel>
+                                <TextBlock Text="各个功能" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                <StackPanel x:Name="ToolSwitchHost" />
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button x:Name="AllToolsOnBtn" Content="全部开启" Width="82" Height="26" />
+                            <Button x:Name="AllToolsOffBtn" Content="全部关闭" Width="82" Height="26" Margin="8,0,0,0" />
+                            <Button x:Name="RestoreDefaultsBtn" Content="恢复默认（常用 5 个）" Width="152" Height="26" Margin="8,0,0,0" />
+                        </StackPanel>
+
+                        <TextBlock x:Name="ToolSwitchHint" Style="{StaticResource Hint}" Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="全局" Style="{StaticResource Section}" />
+
+                <Border Style="{StaticResource Row}">
+                    <StackPanel>
+                        <CheckBox x:Name="AutoStartBox" Content="开机自动启动（写入注册表 Run 键，可随时关闭）" />
+                        <TextBlock x:Name="AutoStartHint" Style="{StaticResource Hint}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Row}">
+                    <StackPanel>
+                        <CheckBox x:Name="ShowFloatingBox" Content="显示悬浮窗" />
+                        <CheckBox x:Name="HideFloatingBox" Content="打开裁剪 / 转换这类大窗口时，临时隐藏悬浮窗" Margin="0,6,0,0" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Text="半透明度" VerticalAlignment="Center" />
+                            <Slider x:Name="OpacitySlider" Width="200" Minimum="0.2" Maximum="1.0"
+                                    TickFrequency="0.05" IsSnapToTickEnabled="True" Margin="12,0,12,0" />
+                            <TextBlock x:Name="OpacityLabel" VerticalAlignment="Center" Foreground="#FF8A94A6" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="热键（注册失败会在这里明确告诉你原因）" Style="{StaticResource Section}" />
+                <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6" TextWrapping="Wrap"
+                           Text="**热键是可选的，一个都不填也完全没问题** —— 点悬浮窗、托盘菜单同样方便。清空某个框 = 那个功能不占热键；填「默认」两个字 = 恢复工具自带的键。" />
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <Button x:Name="ClearAllHotKeysBtn" Content="清空全部热键" Width="112" Height="26"
+                            ToolTip="把每个热键框都清空 —— 这样工具箱不占用任何快捷键，全靠点悬浮窗" />
+                    <Button x:Name="RestoreAllHotKeysBtn" Content="全部恢复默认" Width="112" Height="26" Margin="8,0,0,0" />
+                </StackPanel>
+                <Border Style="{StaticResource Row}">
+                    <StackPanel x:Name="HotKeyHost" />
+                </Border>
+
+                <TextBlock Text="剪贴板历史" Style="{StaticResource Section}" />
+                <Border Style="{StaticResource Row}">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="最多保留条数" VerticalAlignment="Center" Width="110" />
+                            <TextBox x:Name="MaxEntriesBox" Width="90" />
+                            <TextBlock Text="（置顶条目永不淘汰）" Style="{StaticResource Hint}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Text="图片总量上限(MB)" VerticalAlignment="Center" Width="110" />
+                            <TextBox x:Name="MaxImageBox" Width="90" />
+                        </StackPanel>
+                        <CheckBox x:Name="ShowToolWrittenBox" Content="显示工具箱自己写入的记录（排错用，平时不要开）" Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="快捷 AI" Style="{StaticResource Section}" />
+                <Border Style="{StaticResource Row}">
+                    <StackPanel>
+                        <!-- 后端选择：这一步决定了「工具箱能不能分享给别人用」 -->
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="后端" VerticalAlignment="Center" Width="110" />
+                            <ComboBox x:Name="AiBackendCombo" Width="300"
+                                      SelectionChanged="OnAiBackendChanged">
+                                <ComboBoxItem Content="本地 Ollama（数据不出这台机器）" />
+                                <ComboBoxItem Content="远端 API（OpenAI 兼容，零安装）" />
+                            </ComboBox>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" MaxWidth="430" HorizontalAlignment="Left"
+                                   Text="分享给别人的时候，让对方把后端切成「远端 API」填自己的 Key 即可 —— 不用装 Ollama、不用拉模型。"/>
+
+                        <!-- 本地 Ollama 配置 -->
+                        <StackPanel x:Name="OllamaPanel" Margin="0,8,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="服务地址" VerticalAlignment="Center" Width="110" />
+                                <TextBox x:Name="OllamaUrlBox" Width="300" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <TextBlock Text="模型名" VerticalAlignment="Center" Width="110" />
+                                <TextBox x:Name="OllamaModelBox" Width="300" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- 远端 API 配置 -->
+                        <StackPanel x:Name="RemotePanel" Margin="0,8,0,0" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="API 地址" VerticalAlignment="Center" Width="110" />
+                                <TextBox x:Name="RemoteUrlBox" Width="300" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <TextBlock Text="API Key" VerticalAlignment="Center" Width="110" />
+                                <TextBox x:Name="RemoteKeyBox" Width="300" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <TextBlock Text="模型名" VerticalAlignment="Center" Width="110" />
+                                <TextBox x:Name="RemoteModelBox" Width="300" />
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" MaxWidth="430" HorizontalAlignment="Left"
+                                       Text="例：https://api.deepseek.com/v1 ＋ deepseek-chat ｜ https://api.openai.com/v1 ＋ gpt-4o-mini。地址不带 /v1 会自动补。Key 明文存在本机 settings.json 里，别用共享账号的主 Key。" />
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Text="单块字数" VerticalAlignment="Center" Width="110" />
+                            <TextBox x:Name="ChunkBox" Width="90" />
+                            <TextBlock Text="（超长文本按这个粒度分块，太大明显变慢）" Style="{StaticResource Hint}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <CheckBox x:Name="MainContentBox" Content="整窗口读取时默认只取主内容区（自动去掉首尾导航/页脚）" Margin="0,8,0,0" />
+                        <TextBlock x:Name="OllamaStatus" Style="{StaticResource Hint}" TextWrapping="Wrap" MaxWidth="420" HorizontalAlignment="Left" />
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <Button x:Name="TestOllamaBtn" Content="测试连接" Style="{StaticResource Btn}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="格式转换" Style="{StaticResource Section}" />
+                <Border Style="{StaticResource Row}">
+                    <StackPanel>
+                        <TextBlock Text="LibreOffice 路径（留空则自动探测）" />
+                        <Grid Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="SofficeBox" Grid.Column="0" VerticalAlignment="Center" />
+                            <Button x:Name="SofficeBrowseBtn" Grid.Column="1" Content="浏览…" Style="{StaticResource Btn}" />
+                        </Grid>
+                        <TextBlock x:Name="SofficeStatus" Style="{StaticResource Hint}" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="快捷截图" Style="{StaticResource Section}" />
+                <Border Style="{StaticResource Row}">
+                    <StackPanel>
+                        <TextBlock Text="截图保存目录（留空则保存到数据目录下的 screenshots）" TextWrapping="Wrap" />
+                        <Grid Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="ScreenshotDirBox" Grid.Column="0" VerticalAlignment="Center" />
+                            <Button x:Name="ScreenshotDirBrowseBtn" Grid.Column="1" Content="浏览…" Style="{StaticResource Btn}" />
+                        </Grid>
+                        <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                   Text="截好的图以「截图_日期_时间.png」存到这里，并同时复制到剪贴板。按热键 Win+Alt+S 或点悬浮窗上的「截图」直接框选。" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="数据位置" Style="{StaticResource Section}" />
+                <Border Style="{StaticResource Row}">
+                    <StackPanel>
+                        <TextBlock x:Name="DataPathText" TextWrapping="Wrap" Foreground="#FF4E5969" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button x:Name="OpenDataBtn" Content="打开数据目录" Style="{StaticResource Btn}" />
+                            <Button x:Name="OpenLogBtn" Content="打开日志" Style="{StaticResource Btn}" Background="#FF6B7280" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="剪贴板历史、图片、设置都在这里。它不属于项目源码目录，重装程序不会丢。" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="关于隐私" Style="{StaticResource Section}" />
+                <Border Style="{StaticResource Row}">
+                    <TextBlock x:Name="PrivacyText" TextWrapping="Wrap" Foreground="#FF4E5969" />
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="1" Background="#FFF5F6F8" Padding="0,12">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <TextBlock x:Name="SaveHint" VerticalAlignment="Center" Foreground="#FF12A150" Margin="0,0,12,0" />
+                <Button x:Name="SaveBtn" Content="保存" Style="{StaticResource Btn}" Padding="20,6" />
+                <Button x:Name="CloseBtn" Content="关闭" Style="{StaticResource Btn}" Background="#FF9AA4B2" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>DiagModules</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="C:\Users\24239\Desktop\DeepSeek-Workspace\04-其他项目\桌面工具箱\src\Toolbox\Core\Log.cs" />
+    <Compile Include="C:\Users\24239\Desktop\DeepSeek-Workspace\04-其他项目\桌面工具箱\src\Toolbox\Tools\QrCode\QrReedSolomon.cs" />
+    <Compile Include="C:\Users\24239\Desktop\DeepSeek-Workspace\04-其他项目\桌面工具箱\src\Toolbox\Tools\QrCode\QrEncoder.cs" />
+  </ItemGroup>
+</Project>

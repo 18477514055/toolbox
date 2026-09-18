@@ -1,0 +1,94 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!--
+      TFM 带上了最低 Windows 版本（19041 = Win10 2004）。
+      为什么必须加：OCR 工具用的是 **Windows 自带的 WinRT OCR**（Windows.Media.Ocr），
+      而 WinRT 投影只有在 TargetFramework 里声明了 Windows 版本时才可用。
+      加这一项**不提高运行门槛** —— 程序仍然是普通 Win32/WPF 应用，
+      只是编译期允许调用 WinRT API；在更老的系统上跑起来也只是 OCR 那一个工具不可用
+      （OcrEngineService.IsAvailable 会返回 false 并给出中文提示，不影响其余工具）。
+    -->
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <AssemblyName>Toolbox</AssemblyName>
+    <RootNamespace>Toolbox</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!--
+      程序图标。有了这一行，图标会被**嵌进 exe 本身**，于是：
+        · 资源管理器里 exe 直接显示这个图标（不需要旁边放 .ico）；
+        · 托盘图标 / 窗口图标 / Alt+Tab 都能取到它；
+        · 桌面快捷方式即使不显式指定 IconLocation 也会用它。
+      图标用 artifacts\icon\MakeIcon.cs 生成（多分辨率 16~256，全 PNG 帧），
+      配色与程序 UI 是同一套（主色 #2970D1）。
+    -->
+    <ApplicationIcon>Assets\toolbox.ico</ApplicationIcon>
+
+    <!-- 中文环境：不要让全球化被裁剪掉，否则中文排序/编码会出问题 -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+
+    <Version>1.0.0</Version>
+    <Product>桌面工具箱</Product>
+    <AssemblyTitle>桌面工具箱</AssemblyTitle>
+    <Company>桌面工具箱</Company>
+
+    <!--
+      CA1416：本项目只跑 Windows，平台兼容性告警是噪音。
+
+      WFO0003：WinForms 分析器看到 app.manifest 里有 dpiAware/dpiAwareness 就报警，
+      要求改用 ApplicationHighDpiMode 项目属性。**本工程这条警告是误报**：
+      入口点是 WPF 生成的（obj\...\App.g.cs 里的 [STAThread] Main），
+      里面从来没有调用过 Application.SetHighDpiMode —— 走 WinForms 那套等于没设。
+      真正生效的就是 manifest 里的 PerMonitorV2，所以这里显式关掉这个警告。
+    -->
+    <NoWarn>$(NoWarn);CA1416;WFO0003</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      关掉 WinForms 的隐式 using。
+      UseWindowsForms=true 会把 System.Windows.Forms 和 System.Drawing 塞进全局 using，
+      于是 Application / TextBox / Point / MouseEventArgs / KeyEventArgs / DragEventArgs
+      全部变成"不明确的引用"，整个工程到处报 CS0104。
+      我们只在 TrayIcon.cs 一个文件里用 WinForms，而且是全限定名写的，所以直接移除最干净。
+    -->
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
+
+  <!--
+    发布形态（只在 Release 生效，Debug 编译不受影响、保持轻快）。
+
+    为什么自包含：用户机器上不一定装了 .NET 9 运行时。自包含把运行时打进 exe 里，
+    双击就能跑，不需要先装任何东西 —— 这是「一个要交接给别人的桌面小工具」的基本要求。
+
+    为什么开压缩：不开压缩约 170MB（WPF 和 WinForms 两套 UI 栈都被拉进来了）。
+    EnableCompressionInSingleFile 用 Deflate 把托管程序集压进单文件，能压到 ~70MB。
+    代价：首次启动要把运行时解压到临时目录，多花 1~2 秒；之后走缓存，恢复正常速度。
+
+    IncludeNativeLibrariesForSelfExtract 必须开：WPF 的原生依赖
+    （wpfgfx_cor3.dll / PresentationNative_cor3.dll / D3DCompiler_47_cor3.dll）
+    不设这一项就会散落在 exe 旁边，单文件就白做了。
+  -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+
+    <!-- 发布件不需要调试符号和 XML 文档，别占体积 -->
+    <DebugType>none</DebugType>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

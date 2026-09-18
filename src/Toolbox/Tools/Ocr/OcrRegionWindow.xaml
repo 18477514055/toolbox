@@ -1,0 +1,40 @@
+<Window x:Class="Toolbox.Tools.Ocr.OcrRegionWindow"
+        x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="OCR 截图识字"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        WindowState="Normal"
+        FontFamily="Microsoft YaHei UI, Microsoft YaHei, Segoe UI"
+        Cursor="Cross">
+
+    <!--
+      框选层。与「快捷截图」同构（都复用 ScreenCapture 抓的冻结整屏当背景），
+      但目的不同：截图是存 PNG，这里是送去做 OCR。
+
+      刻意**不直接复用 ScreenshotWindow**：那个窗口的 Finish() 里写死了
+      "裁剪→存 PNG→复制剪贴板"这一套收尾；OCR 要的是"裁剪→识别→复制文字"。
+      硬塞一个模式开关进去会让两边都变难读。共用的是**底层能力**
+      （ScreenCapture 抓屏 + 同一套 DPI 换算），那才是真正该复用的部分。
+    -->
+    <Grid x:Name="Root">
+        <Image x:Name="Backdrop" Stretch="Fill" IsHitTestVisible="False" />
+        <Path x:Name="Dimmer" Fill="#99000000" IsHitTestVisible="False" />
+        <Rectangle x:Name="SelRect"
+                   Stroke="#FF12A150" StrokeThickness="2"
+                   Fill="#20FFFFFF" IsHitTestVisible="False"
+                   Visibility="Collapsed" />
+        <Border x:Name="Hint"
+                Background="#CC000000" CornerRadius="4" Padding="10,5"
+                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,14,0,0"
+                IsHitTestVisible="False">
+            <TextBlock Text="框选要识别的文字区域　·　右键 / Esc 取消"
+                       Foreground="White" FontSize="13" />
+        </Border>
+    </Grid>
+</Window>

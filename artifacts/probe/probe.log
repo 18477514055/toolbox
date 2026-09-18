@@ -1,0 +1,38 @@
+=== 快捷剪贴板 · P0 抓取探针 ===
+启动时间   : 2026-09-17 09:02:13
+落盘目录   : C:\Users\24239\Desktop\DeepSeek-Workspace\04-其他项目\桌面工具箱\artifacts\probe
+本次索引   : C:\Users\24239\Desktop\DeepSeek-Workspace\04-其他项目\桌面工具箱\artifacts\probe\history-20260917.jsonl
+图片本体   : C:\Users\24239\Desktop\DeepSeek-Workspace\04-其他项目\桌面工具箱\artifacts\probe\blobs
+日志文件   : C:\Users\24239\Desktop\DeepSeek-Workspace\04-其他项目\桌面工具箱\artifacts\probe\probe.log
+
+现在起正常用电脑：复制文字、截图/复制图片、在资源管理器里复制文件…
+每抓到一条就打一行。停止方式：Ctrl+C（会生成 summary.json）。
+--------------------------------------------------------------
+监听已注册（AddClipboardFormatListener 成功）。等待剪贴板事件…
+
+（停止探针请按 Ctrl+C；日志同时写在 probe.log，关掉窗口也不影响已抓到的记录。）
+[2026-09-17 09:02:21.724] #0001     text        51 B  len=31  "验收文本：中文 English 混排 🎯 267876575"
+[2026-09-17 09:02:21.877] #0002 dup text        51 B  len=31  "验收文本：中文 English 混排 🎯 267876575"
+[2026-09-17 09:02:21.880] #0003 dup text        51 B  len=31  "验收文本：中文 English 混排 🎯 267876575"
+[2026-09-17 09:02:22.741] #0004     files      950 B  x2  "C:\Windows\System32\drivers\etc\hosts"
+[2026-09-17 09:02:22.852] #0005 dup files      950 B  x2  "C:\Windows\System32\drivers\etc\hosts"
+[2026-09-17 09:02:22.854] #0006 dup files      950 B  x2  "C:\Windows\System32\drivers\etc\hosts"
+=== 快捷剪贴板 · P0 抓取探针 ===
+启动时间   : 2026-09-17 09:03:25
+落盘目录   : C:\Users\24239\Desktop\DeepSeek-Workspace\04-其他项目\桌面工具箱\artifacts\probe
+本次索引   : C:\Users\24239\Desktop\DeepSeek-Workspace\04-其他项目\桌面工具箱\artifacts\probe\history-20260917.jsonl
+图片本体   : C:\Users\24239\Desktop\DeepSeek-Workspace\04-其他项目\桌面工具箱\artifacts\probe\blobs
+日志文件   : C:\Users\24239\Desktop\DeepSeek-Workspace\04-其他项目\桌面工具箱\artifacts\probe\probe.log
+
+现在起正常用电脑：复制文字、截图/复制图片、在资源管理器里复制文件…
+每抓到一条就打一行。停止方式：Ctrl+C（会生成 summary.json）。
+--------------------------------------------------------------
+监听已注册（AddClipboardFormatListener 成功）。等待剪贴板事件…
+
+（停止探针请按 Ctrl+C；日志同时写在 probe.log，关掉窗口也不影响已抓到的记录。）
+[2026-09-17 09:03:28.736] #0001     text        49 B  len=25  "滚动统计验证 1903665886 —— 中文内容"
+[2026-09-17 09:03:28.899] #0002 dup text        49 B  len=25  "滚动统计验证 1903665886 —— 中文内容"
+[2026-09-17 09:03:28.913] #0003 dup text        49 B  len=25  "滚动统计验证 1903665886 —— 中文内容"
+[2026-09-17 09:03:29.743] #0004     files      858 B  x1  "C:\Windows\System32\drivers\etc\hosts"
+[2026-09-17 09:03:29.886] #0005 dup files      858 B  x1  "C:\Windows\System32\drivers\etc\hosts"
+[2026-09-17 09:03:29.902] #0006 dup files      858 B  x1  "C:\Windows\System32\drivers\etc\hosts"

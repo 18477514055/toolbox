@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>DiagOcr</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>$(NoWarn);WFO0003;CA1416</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="C:\Users\24239\Desktop\DeepSeek-Workspace\04-其他项目\桌面工具箱\src\Toolbox\Core\Log.cs" />
+    <Compile Include="C:\Users\24239\Desktop\DeepSeek-Workspace\04-其他项目\桌面工具箱\src\Toolbox\Tools\Ocr\OcrEngineService.cs" />
+  </ItemGroup>
+</Project>

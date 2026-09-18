@@ -1,0 +1,43 @@
+{
+  "时间": "2026-09-17 12:26:21",
+  "结论": "全部通过",
+  "通过": "3/3",
+  "用例": [
+    {
+      "Name": "纯文本复制 → 抓到 text",
+      "Passed": true,
+      "Kind": "text",
+      "Files": null,
+      "Width": null,
+      "Height": null,
+      "TextLength": 24,
+      "ReadMs": 236,
+      "Attempts": 1,
+      "Detail": "内容逐字一致，读到 36 字节"
+    },
+    {
+      "Name": "纯图片复制 → 抓到 image 且尺寸正确",
+      "Passed": true,
+      "Kind": "image",
+      "Files": null,
+      "Width": 120,
+      "Height": 80,
+      "TextLength": null,
+      "ReadMs": 86,
+      "Attempts": 1,
+      "Detail": "120x80，PNG 已落盘并回读解码成功（521 字节）"
+    },
+    {
+      "Name": "混合剪贴板（文件+文本+图片）→ 优先判为 files",
+      "Passed": true,
+      "Kind": "files",
+      "Files": 2,
+      "Width": null,
+      "Height": null,
+      "TextLength": null,
+      "ReadMs": 25,
+      "Attempts": 1,
+      "Detail": "2 个文件、路径与大小均正确（B 文件 4096 字节）"
+    }
+  ]
+}

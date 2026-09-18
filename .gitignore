@@ -1,0 +1,21 @@
+# 构建产物（不入库）
+bin/
+obj/
+dist/
+*.user
+*.suo
+.vs/
+
+# 验收 / 排查用的临时工程（各自有自己的 obj/bin）
+artifacts/**/bin/
+artifacts/**/obj/
+
+# 分享包（体积大，发 Releases 而不是入库）
+share/
+
+# 大体量的测试数据（若以后有）
+*.traineddata
+
+# 本地环境
+.vscode/
+.idea/

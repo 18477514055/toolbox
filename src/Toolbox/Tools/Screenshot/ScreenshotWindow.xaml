@@ -1,0 +1,36 @@
+<Window x:Class="Toolbox.Tools.Screenshot.ScreenshotWindow"
+        x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="快捷截图"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        WindowState="Normal"
+        FontFamily="Microsoft YaHei UI, Microsoft YaHei, Segoe UI"
+        Cursor="Cross">
+
+    <!--
+      全屏透明遮罩：先把冻结的屏幕当背景，再压一层「除选区外都变暗」的蒙版，
+      让用户一眼看清要截哪块。选区本身透出明亮背景 + 蓝色描边。
+      蒙版 / 选区 / 提示条都设 IsHitTestVisible=False，鼠标事件全部落到窗口上，
+      由代码统一处理拖拽。
+    -->
+    <Grid x:Name="Root">
+        <Image x:Name="Backdrop" Stretch="Fill" IsHitTestVisible="False" />
+        <Path x:Name="Dimmer" Fill="#80000000" IsHitTestVisible="False" />
+        <Rectangle x:Name="SelRect"
+                   Stroke="#FF2970D1" StrokeThickness="2"
+                   Fill="#20FFFFFF" IsHitTestVisible="False"
+                   Visibility="Collapsed" />
+        <Border x:Name="Hint"
+                Background="#CC000000" CornerRadius="4" Padding="10,5"
+                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,14,0,0"
+                IsHitTestVisible="False">
+            <TextBlock Text="拖拽框选区域　·　右键 / Esc 取消" Foreground="White" FontSize="13" />
+        </Border>
+    </Grid>
+</Window>

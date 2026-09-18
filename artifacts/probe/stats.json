@@ -1,0 +1,19 @@
+{
+  "状态": "运行中或已结束（本文件每条事件刷新一次，被强制结束也留得住）",
+  "开始时间": "2026-09-17 09:03:25",
+  "更新时间": "2026-09-17 09:03:29",
+  "运行时长": "00:00:04",
+  "总事件数": 6,
+  "分类计数": {
+    "text": 3,
+    "files": 3
+  },
+  "内容唯一数": 2,
+  "重复内容次数": 4,
+  "空事件数": 0,
+  "读取失败数": 0,
+  "重试次数": 0,
+  "索引文件": "C:\\Users\\24239\\Desktop\\DeepSeek-Workspace\\04-其他项目\\桌面工具箱\\artifacts\\probe\\history-20260917.jsonl",
+  "图片目录": "C:\\Users\\24239\\Desktop\\DeepSeek-Workspace\\04-其他项目\\桌面工具箱\\artifacts\\probe\\blobs",
+  "日志文件": "C:\\Users\\24239\\Desktop\\DeepSeek-Workspace\\04-其他项目\\桌面工具箱\\artifacts\\probe\\probe.log"
+}

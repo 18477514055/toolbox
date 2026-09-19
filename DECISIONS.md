@@ -1422,4 +1422,103 @@ Run 键失效的原因有一堆（安全软件、Explorer 启动顺序、组策�
 
 ---
 
+---
+
+## 二十三、两个"点了没反应"的故障（2026-09-19 用户实测报告）
+
+> 用户报了两个问题：① 悬浮窗展不开；② 运行命令弹不出输入框。
+> 两个都是**真 bug**，两个都极难自查 —— 因为界面上只有"没反应"三个字。
+
+### 坑 47：悬浮窗卡在 22×32 像素，用户完全没法操作
+
+**现象**：悬浮窗只剩一条 22×32 的小碎片，点它没有反应，展不开。
+
+**排查过程**（这一步很关键，值得记）：
+因为"看不见"是主观描述，我先去**问系统实际状态** ——
+用 `EnumWindows` 列出该进程的所有窗口及尺寸，一眼看到
+`可见 22x32 @(1810,472)`。**把主观描述变成客观数字，问题立刻清晰。**
+
+**根因**（两层，第一层修完才发现第二层）：
+
+1. **展开时窗口尺寸不重算**
+   XAML 是 `SizeToContent=WidthAndHeight`，收起时内容全部 Collapsed
+   ⇒ 窗口被自动缩到 22×32。展开时把内容设回 Visible，
+   但 WPF 没有重新调整窗口大小（`ResizeMode=NoResize` +
+   我们自己用 SetWindowPos 改过位置，几个因素叠加）。
+   ⇒ 内容是"可见"了，但窗口还是 22×32，什么都看不到。
+
+2. **`_collapsed` 字段从未与设置同步**（第一层修完才暴露）
+   `OnLoaded` 里只调了 `ApplyCollapsed(true)`，**没有设 `_collapsed = true`**。
+   于是自愈逻辑里 `if (_collapsed)` 不成立 ——
+   窗口被放大了，但**没写回设置** ⇒ 每次开机都重复触发一次异常路径。
+
+**修法**：
+- `ApplyCollapsed` 里显式重算尺寸（`SizeToContent` 收放一轮 + `UpdateLayout`）；
+- `OnLoaded` 里先把 `_collapsed` 与设置同步，再应用外观；
+- 自愈判据改成"**尺寸异常本身**"，不再看 `_collapsed` 字段。
+
+**最重要的一条：加了兜底自愈。**
+`EnsureUsableSize` 在每次贴边时检查尺寸，小于 100×100 就强制恢复并展开。
+
+**为什么兜底是必须的，而不是"可选的加固"**：
+这类"界面把自己变得没法操作"的故障，**用户连打开设置改回来都做不到** ——
+他唯一能做的只有手改 `settings.json`，而普通用户根本不会。
+**凡是会让用户失去自救能力的故障，都必须有程序内的兜底。**
+
+### 坑 48：`try/catch` 里又用了同一个 null 对象 ⇒ 异常二次抛出
+
+**现象**：「运行命令」点了完全没反应，窗口不出现。
+
+**排查过程**：日志里只有一句
+`NullReferenceException: Object reference not set...`
+—— **零信息量**。NullReference 必须知道"哪一行"才能修。
+
+⇒ 我先**改进了日志**：让 `Log.Exception` 记录完整堆栈与内部异常。
+改完立刻拿到精确位置：
+
+```
+CommandWindow.InitializeComponent()
+  → ComboBox.OnSelectionChanged
+  → CommandWindow.OnShellChanged(...)     ← 崩在这里
+```
+
+**根因**：
+XAML 里下拉框写了 `SelectedIndex="0"` + `SelectionChanged="OnShellChanged"`。
+这两者组合的后果是 —— **在 `InitializeComponent()` 解析 XAML 的过程中**，
+ComboBox 一建好就被设上 SelectedIndex，立刻触发 `OnShellChanged`；
+而此时排在 XAML **后面**的 `PreviewText` / `ShellHint` 还是 `null`。
+
+于是 `PreviewText.Text = ...` 抛异常。**更糟的是**：
+```csharp
+catch (Exception ex)
+{
+    PreviewText.Text = $"预览失败：{ex.Message}";   // ← catch 里又碰了同一个 null
+}
+```
+异常从 catch 里**再次抛出**，一路冒到工具的 `Invoke()`，
+结果**整个窗口都打不开**。
+
+**修法**：
+- 显式判"控件是否就绪"（`if (PreviewText is null) return;`），
+  而不是靠异常控制流；
+- **catch 块里也不能假设控件存在**（这正是本次 bug 的成因）；
+- 工具的 `Invoke()` 加 try/catch + 托盘气泡 ——
+  窗口建不起来时**必须告诉用户**，不能只往日志里写一行。
+
+**通用教训（这条最值得记）**：
+**`catch` 块里用到了可能为 null 的同一个对象，是"异常处理反而放大故障"的经典写法。**
+catch 的职责是"把故障限制在局部"，如果它自己又抛一个，
+故障就扩散成了"整个功能不可用"。
+
+### 附带收获：日志只记 Message 等于没记
+
+这次两个 bug 都卡在"日志信息不足"上。
+改进后 `Log.Exception` 会记录**完整堆栈 + 内部异常链**。
+
+**代价是每次异常多占十几行日志，收益是"一眼定位"。**
+对于排查"用户说点了没反应"这类**没有复现步骤**的问题，
+这个交换非常划算 —— 用户只要把日志发过来，就能直接指到行号。
+
+---
+
 *本文件随每次得出结论更新。写新结论时**必须**带证据。*

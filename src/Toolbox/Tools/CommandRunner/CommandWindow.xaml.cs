@@ -63,8 +63,33 @@ internal sealed partial class CommandWindow : Window
         UpdatePreview();
     }
 
+    /// <summary>
+    /// 界面控件是否已经建好。
+    ///
+    /// ⚠️ 为什么需要这个判据（实测抓到的真 bug，见 DECISIONS 坑 48）：
+    ///   XAML 里 shell 下拉框写了 `SelectedIndex="0"` 与
+    ///   `SelectionChanged="OnShellChanged"`。两者组合的后果是 ——
+    ///   **在 InitializeComponent() 解析 XAML 的过程中**，那个 ComboBox
+    ///   一旦建好并设上 SelectedIndex，就立刻触发 OnShellChanged；
+    ///   而此时排在 XAML **后面**的 PreviewText / ShellHint 仍然是 null。
+    ///
+    ///   于是 `PreviewText.Text = ...` 抛 NullReferenceException，
+    ///   而 catch 块里**又**写了一次 `PreviewText.Text` ——
+    ///   异常从 catch 里再次逃出，一路冒到工具的 Invoke()，
+    ///   结果**整个窗口都打不开**（用户看到的就是"点了没反应"）。
+    ///
+    ///   修法：显式判"控件是否就绪"，而不是靠异常控制流。
+    /// </summary>
+    private bool PreviewControlsReady => PreviewText is not null && ShellHint is not null;
+
     private void UpdateShellHint()
     {
+        // 控件还没建好就跳过 —— 少更新一次无害，抛异常会让窗口打不开
+        if (ShellHint is null)
+        {
+            return;
+        }
+
         try
         {
             var kind = SelectedShell();
@@ -81,13 +106,26 @@ internal sealed partial class CommandWindow : Window
         }
         catch (Exception ex)
         {
-            ShellHint.Text = $"解析 shell 失败：{ex.Message}";
+            // ★ catch 里也不能假设控件存在 —— 这正是本次 bug 的成因：
+            //   原来的 catch 直接写 ShellHint.Text，异常二次抛出逃走了
+            if (ShellHint is not null)
+            {
+                ShellHint.Text = $"解析 shell 失败：{ex.Message}";
+            }
+
+            Log.Exception("刷新 shell 提示失败", ex);
         }
     }
 
     /// <summary>实时把"将要执行什么"显示给用户（可核对，这是安全设计的一部分）。</summary>
     private void UpdatePreview()
     {
+        // 同上：InitializeComponent 期间可能还没建好
+        if (PreviewText is null || CommandBox is null)
+        {
+            return;
+        }
+
         try
         {
             var command = CommandBox.Text;
@@ -103,7 +141,13 @@ internal sealed partial class CommandWindow : Window
         }
         catch (Exception ex)
         {
-            PreviewText.Text = $"预览失败：{ex.Message}";
+            // catch 里同样要判 null（本次 bug 的直接原因就在这里）
+            if (PreviewText is not null)
+            {
+                PreviewText.Text = $"预览失败：{ex.Message}";
+            }
+
+            Log.Exception("刷新命令预览失败", ex);
         }
     }
 

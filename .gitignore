@@ -36,3 +36,5 @@ artifacts/**/plugins/
 .release-notes.md
 
 .msg.txt
+
+.msg2.txt

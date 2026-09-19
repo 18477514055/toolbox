@@ -54,7 +54,55 @@ public static class Log
 
     public static void Exception(string context, Exception ex)
     {
+        // ★ 记**完整堆栈**，不只记 Message。
+        //
+        //   为什么（实测吃过亏）：原来只写 `类型: 消息`，于是
+        //   `NullReferenceException: Object reference not set...`
+        //   这种**毫无信息量的**异常在日志里查不出任何线索 ——
+        //   NullReference 必须知道"哪一行"才能修，只给消息等于没记。
+        //   堆栈多占几行日志，换来的是"一眼定位"，非常划算。
         Write($"[异常] {context} → {ex.GetType().Name}: {ex.Message}");
+
+        try
+        {
+            WriteTrace(ex.StackTrace, "    ");
+
+            // 内部异常往往才是真凶（外层多半只是包装）
+            var inner = ex.InnerException;
+            var depth = 0;
+
+            while (inner is not null && depth < 5)
+            {
+                Write($"    → 内部异常：{inner.GetType().Name}: {inner.Message}");
+                WriteTrace(inner.StackTrace, "        ");
+
+                inner = inner.InnerException;
+                depth++;
+            }
+        }
+        catch
+        {
+            // 记日志本身绝不能抛异常（否则会把真正的错误盖掉）
+        }
+    }
+
+    /// <summary>把堆栈逐行写进日志（带缩进）。</summary>
+    private static void WriteTrace(string? stackTrace, string indent)
+    {
+        if (string.IsNullOrWhiteSpace(stackTrace))
+        {
+            return;
+        }
+
+        foreach (var line in stackTrace.Split('\n'))
+        {
+            var trimmed = line.Trim();
+
+            if (trimmed.Length > 0)
+            {
+                Write($"{indent}{trimmed}");
+            }
+        }
     }
 
     private static void Write(string message)

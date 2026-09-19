@@ -50,10 +50,26 @@ internal sealed class CommandRunnerTool : IToolboxTool
             return;
         }
 
-        _window = new CommandWindow(_ctx);
-        _window.Closed += (_, _) => _window = null;
-        _window.Show();
-        _window.Activate();
+        try
+        {
+            _window = new CommandWindow(_ctx);
+            _window.Closed += (_, _) => _window = null;
+            _window.Show();
+            _window.Activate();
+        }
+        catch (Exception ex)
+        {
+            // ★ 窗口建不起来时**必须告诉用户**，不能只往日志里写一行。
+            //
+            //   为什么（实测事故）：曾经因为 XAML 加载期的一个
+            //   NullReferenceException，这个工具点了完全没反应 ——
+            //   日志里有异常，但界面上毫无提示，用户只能以为"功能坏了"。
+            //   一个气泡就能把"坏了"变成"坏了，原因是 X"。
+            Log.Exception("打开运行命令窗口失败", ex);
+            _window = null;
+
+            _ctx.Notify("运行命令", $"窗口打不开：{ex.Message}\n（详情见日志）");
+        }
     }
 
     public void Stop()

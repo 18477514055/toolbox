@@ -93,6 +93,8 @@ internal static class SelfTest
             RunToolSwitchTests();
             RunToolStoreTests();
             RunPluginTests();
+            RunFloatingWindowTests();
+            RunCommandWindowTests();
             RunAutoStartTests();
             RunSupportTests();
             RunRegistrationTests();
@@ -2017,6 +2019,213 @@ internal static class SelfTest
         catch (Exception ex)
         {
             Add("工具仓库：SHA-256 计算正确（公开测试向量）", false, ex.Message);
+        }
+    }
+
+    // ---------------------------------------------------------------- 悬浮窗自愈
+
+    /// <summary>
+    /// 悬浮窗"变小到没法用"的自愈机制。
+    ///
+    /// 背景（实测事故，见 DECISIONS 坑 47/48）：
+    ///   悬浮窗曾卡在 22×32 像素 —— 内容被裁光、点了没反应，
+    ///   用户只能手改 settings.json 才能继续用。
+    ///   **用户没有任何自救手段**，这是最糟的一类故障。
+    /// </summary>
+    private static void RunFloatingWindowTests()
+    {
+        try
+        {
+            var type = typeof(FloatingWindow);
+
+            var hasEnsure = type.GetMethod("EnsureUsableSize",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) is not null;
+
+            var minW = type.GetField("MinUsableWidth",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            var minH = type.GetField("MinUsableHeight",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+            var hasMins = minW is not null && minH is not null;
+            var minValue = hasMins ? (double)minW!.GetValue(null)! : 0;
+
+            var ok = hasEnsure && hasMins && minValue > 0;
+
+            Add("悬浮窗：具备「尺寸异常时自愈」的兜底", ok,
+                ok
+                    ? $"EnsureUsableSize 存在，最小可用尺寸 = {minValue:0}×{(double)minH!.GetValue(null)!:0}"
+                    : $"hasEnsure={hasEnsure} hasMins={hasMins} minValue={minValue}");
+        }
+        catch (Exception ex)
+        {
+            Add("悬浮窗：具备「尺寸异常时自愈」的兜底", false, ex.Message);
+        }
+
+        // ---- 自愈必须**同时**恢复尺寸与展开状态 ----
+        //
+        // 防的是我第一版犯的错：只把窗口放大，没管内容还是 Collapsed，
+        // 于是窗口变大了却一片空白，用户依然什么都点不到。
+        try
+        {
+            var root = FindSourceRoot();
+            var file = string.IsNullOrEmpty(root)
+                ? ""
+                : Path.Combine(root, "Shell", "FloatingWindow.xaml.cs");
+
+            if (string.IsNullOrEmpty(root) || !File.Exists(file))
+            {
+                Cases.Add(new Case
+                {
+                    Name = "悬浮窗：自愈时同时恢复「尺寸」与「展开状态」",
+                    Passed = true,
+                    Informational = true,
+                    Detail = "读不到 FloatingWindow.xaml.cs（安装版没有源码树），跳过。",
+                });
+            }
+            else
+            {
+                var text = File.ReadAllText(file, System.Text.Encoding.UTF8);
+
+                var idx = text.IndexOf("private void EnsureUsableSize", StringComparison.Ordinal);
+                var body = idx >= 0 ? text.Substring(idx, Math.Min(4000, text.Length - idx)) : "";
+
+                var setsSize = body.Contains("Width =") && body.Contains("Height =");
+                var setsVisible = body.Contains("ToolHost.Visibility");
+                var persists = body.Contains("FloatingCollapsed = false");
+
+                var ok = setsSize && setsVisible && persists;
+
+                Add("悬浮窗：自愈时同时恢复「尺寸」与「展开状态」", ok,
+                    ok
+                        ? "自愈逻辑同时设了尺寸、显式展开了内容、并写回了设置"
+                        : $"setsSize={setsSize} setsVisible={setsVisible} persists={persists}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Add("悬浮窗：自愈时同时恢复「尺寸」与「展开状态」", false, ex.Message);
+        }
+    }
+
+    // ---------------------------------------------------------------- 运行命令窗口
+
+    /// <summary>
+    /// 「运行命令」窗口必须能在 XAML 加载期安全处理"控件尚未建好"。
+    ///
+    /// 背景（实测事故，见 DECISIONS 坑 48）：
+    ///   XAML 里 ComboBox 的 `SelectedIndex="0"` 会在 InitializeComponent
+    ///   **期间**触发 SelectionChanged，此时排在后面的控件还是 null。
+    ///   原实现只靠 try/catch，而 **catch 块里又访问了同一个 null 控件** ——
+    ///   异常二次抛出，一路冒到工具 Invoke()，结果整个窗口打不开。
+    /// </summary>
+    private static void RunCommandWindowTests()
+    {
+        try
+        {
+            var root = FindSourceRoot();
+            var file = string.IsNullOrEmpty(root)
+                ? ""
+                : Path.Combine(root, "Tools", "CommandRunner", "CommandWindow.xaml.cs");
+
+            if (string.IsNullOrEmpty(root) || !File.Exists(file))
+            {
+                Cases.Add(new Case
+                {
+                    Name = "运行命令：窗口在 XAML 加载期不会因控件未就绪而崩",
+                    Passed = true,
+                    Informational = true,
+                    Detail = "读不到 CommandWindow.xaml.cs（安装版没有源码树），跳过。",
+                });
+            }
+            else
+            {
+                var text = File.ReadAllText(file, System.Text.Encoding.UTF8);
+
+                var hasReadyGuard = text.Contains("PreviewControlsReady")
+                                    || text.Contains("PreviewText is null")
+                                    || text.Contains("ShellHint is null");
+
+                var catchCount = 0;
+                var unguardedCatch = 0;
+
+                var pos = 0;
+                while (true)
+                {
+                    var ci = text.IndexOf("catch (Exception ex)", pos, StringComparison.Ordinal);
+                    if (ci < 0)
+                    {
+                        break;
+                    }
+
+                    catchCount++;
+                    var seg = text.Substring(ci, Math.Min(400, text.Length - ci));
+
+                    var touchesUi = seg.Contains("PreviewText.Text") || seg.Contains("ShellHint.Text");
+                    var guarded = seg.Contains("is not null") || seg.Contains("is null");
+
+                    if (touchesUi && !guarded)
+                    {
+                        unguardedCatch++;
+                    }
+
+                    pos = ci + 10;
+                }
+
+                var ok = hasReadyGuard && unguardedCatch == 0;
+
+                Add("运行命令：窗口在 XAML 加载期不会因控件未就绪而崩", ok,
+                    ok
+                        ? $"有就绪判据；检查了 {catchCount} 个 catch 块，没有「未判 null 就碰控件」的写法"
+                        : $"hasReadyGuard={hasReadyGuard} 未加保护的 catch={unguardedCatch}/{catchCount}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Add("运行命令：窗口在 XAML 加载期不会因控件未就绪而崩", false, ex.Message);
+        }
+
+        // ---- 窗口打不开时必须通知用户 ----
+        //
+        // 实测教训：那个 NullReferenceException 让工具"点了没反应"，
+        // 日志里有异常但界面毫无提示，用户只能以为功能坏了。
+        try
+        {
+            var root = FindSourceRoot();
+            var file = string.IsNullOrEmpty(root)
+                ? ""
+                : Path.Combine(root, "Tools", "CommandRunner", "CommandRunnerTool.cs");
+
+            if (string.IsNullOrEmpty(root) || !File.Exists(file))
+            {
+                Cases.Add(new Case
+                {
+                    Name = "运行命令：窗口建不起来时有明确提示（不是静默失败）",
+                    Passed = true,
+                    Informational = true,
+                    Detail = "读不到 CommandRunnerTool.cs（安装版没有源码树），跳过。",
+                });
+            }
+            else
+            {
+                var text = File.ReadAllText(file, System.Text.Encoding.UTF8);
+
+                var idx = text.IndexOf("public void Invoke", StringComparison.Ordinal);
+                var body = idx >= 0 ? text.Substring(idx, Math.Min(1500, text.Length - idx)) : "";
+
+                var hasTry = body.Contains("try");
+                var notifies = body.Contains("Notify(");
+
+                var ok = hasTry && notifies;
+
+                Add("运行命令：窗口建不起来时有明确提示（不是静默失败）", ok,
+                    ok
+                        ? "Invoke 里有 try/catch，失败时会弹托盘气泡告诉用户"
+                        : $"hasTry={hasTry} notifies={notifies}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Add("运行命令：窗口建不起来时有明确提示（不是静默失败）", false, ex.Message);
         }
     }
 

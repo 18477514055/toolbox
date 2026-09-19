@@ -6,7 +6,7 @@ namespace Toolbox.Core;
 /// 监听跑在独占的 STA 线程上（见 MessageThread 的说明），
 /// 读到的结果通过 <see cref="Captured"/> 事件抛给上层；上层自己负责切回 UI 线程。
 /// </summary>
-internal sealed class ClipboardService : IDisposable
+public sealed class ClipboardService : IDisposable
 {
     private readonly MessageThread _thread;
     private readonly object _gate = new();

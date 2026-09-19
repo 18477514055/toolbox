@@ -10,7 +10,7 @@ namespace Toolbox.Shell;
 /// 全部设置项。设计原则：**能配置的东西一律给默认值，程序不依赖设置文件也能跑**。
 /// 设置文件损坏 / 不存在 / 是旧版本，都必须能正常启动（见 SettingsStore.Load）。
 /// </summary>
-internal sealed class Settings
+public sealed class Settings
 {
     // ---------------- 热键 ----------------
 
@@ -182,7 +182,7 @@ internal sealed class Settings
 /// 设置的读写。刻意做成「**读失败就用默认值继续跑**」——
 /// 设置文件坏掉导致整个工具箱打不开，是绝对不能接受的失败模式。
 /// </summary>
-internal sealed class SettingsStore
+public sealed class SettingsStore
 {
     private static readonly JsonSerializerOptions Options = new()
     {

@@ -10,7 +10,7 @@ namespace Toolbox.Shell;
 /// 用户把悬浮窗放在副屏右侧，拔掉副屏后，绝对坐标会落在不存在的区域里，
 /// 窗口就"消失"了，而且用户根本不知道为什么。按百分比存就永远落在可见区域内。
 /// </summary>
-internal static class ScreenPlacement
+public static class ScreenPlacement
 {
     /// <summary>拿到鼠标所在显示器的工作区（物理像素，已排除任务栏）。</summary>
     public static (double Left, double Top, double Width, double Height) GetWorkAreaOfCursor()

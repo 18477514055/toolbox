@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
@@ -91,6 +92,7 @@ internal static class SelfTest
             RunArchiveTests();
             RunToolSwitchTests();
             RunToolStoreTests();
+            RunPluginTests();
             RunRegistrationTests();
             RunConvertTests();
             RunEnvironmentTests();
@@ -1547,10 +1549,39 @@ internal static class SelfTest
         {
             var toolInterface = typeof(IToolboxTool);
 
-            var implementations = toolInterface.Assembly
-                .GetTypes()
+            // ★ 扫**所有已加载的程序集**，而不是只扫 toolInterface 所在的那一个。
+            //
+            //   为什么（B 阶段重构后暴露的真问题）：
+            //     IToolboxTool 已搬到 Toolbox.Contracts.dll，
+            //     而**实现类**在主程序 Toolbox.exe 里。
+            //     原来写 toolInterface.Assembly 只会扫契约程序集 ⇒ 一个实现都找不到
+            //     ⇒ 用例报"反射查找可能失效"。
+            //     这不是产品坏了，是**扫描范围跟不上重构**。
+            //
+            //   改成扫全部已加载程序集之后，这条用例还顺带能覆盖
+            //   "插件程序集里的工具类" —— 以后插件也会在这里被看见。
+            var implementations = AppDomain.CurrentDomain.GetAssemblies()
+                .Where(a => !a.IsDynamic)
+                .SelectMany(a =>
+                {
+                    try
+                    {
+                        return a.GetTypes();
+                    }
+                    catch (ReflectionTypeLoadException ex)
+                    {
+                        // 部分类型加载失败时，能拿到的那些仍然有用 ——
+                        // 不要因为一个加载不上的类型就整个放弃
+                        return ex.Types.Where(t => t is not null).Cast<Type>();
+                    }
+                    catch
+                    {
+                        return Array.Empty<Type>();
+                    }
+                })
                 .Where(t => t.IsClass && !t.IsAbstract && toolInterface.IsAssignableFrom(t))
                 .Select(t => t.Name)
+                .Distinct()
                 .OrderBy(n => n)
                 .ToList();
 
@@ -1600,18 +1631,88 @@ internal static class SelfTest
                 .ToHashSet(StringComparer.Ordinal);
 
             var notRegistered = implementations.Where(t => !registered.Contains(t)).ToList();
-            var ok = notRegistered.Count == 0;
+
+            // ★ B 阶段起：**插件工具**合法地不出现在 App.xaml.cs 里。
+            //
+            //   它们的注册方式是"被 PluginLoader 从插件目录发现并加载"，
+            //   所以不能拿"App.xaml.cs 里有没有 Add 这一行"判定它漏了接线。
+            //
+            //   怎么区分"有意做成插件的"和"真的忘了接线的"：
+            //   看磁盘上有没有对应的**插件工程**（plugins-src\...\*.csproj）。
+            //   有 ⇒ 它本就是插件，不算漏。
+            //
+            //   ⚠️ 这条判断必须**读磁盘**，不能自己维护一份"哪些是插件"的名单 ——
+            //      那样又变成"我以为"了（见 DECISIONS 坑 32/33 的教训）。
+            var pluginToolNames = FindPluginToolNames();
+
+            var genuinelyMissing = notRegistered
+                .Where(n => !pluginToolNames.Contains(n))
+                .ToList();
+
+            var ok = genuinelyMissing.Count == 0;
 
             Add("工具发现：所有工具类都在 App 里注册了（防「忘了接线」）", ok,
                 ok
-                    ? $"程序集里 {implementations.Count} 个工具类，App.xaml.cs 里 {registered.Count} 条注册，一一对应"
-                    : $"★ 这些工具类**没有在 App.xaml.cs 里注册**（写了代码但没接上线）："
-                      + string.Join("、", notRegistered));
+                    ? (notRegistered.Count == 0
+                        ? $"程序集里 {implementations.Count} 个工具类，App.xaml.cs 里 {registered.Count} 条注册，一一对应"
+                        : $"程序集里 {implementations.Count} 个工具类：{registered.Count} 个内置注册，"
+                          + $"{notRegistered.Count} 个走插件机制（{string.Join("、", notRegistered)}）")
+                    : $"★ 这些工具类**既没在 App.xaml.cs 里注册、也不是插件**："
+                      + string.Join("、", genuinelyMissing));
         }
         catch (Exception ex)
         {
             Add("工具发现：所有工具类都在 App 里注册了（防「忘了接线」）", false, ex.Message);
         }
+    }
+
+    /// <summary>
+    /// 扫出"哪些工具被做成了插件"（按磁盘上的插件工程判断）。
+    ///
+    /// 依据：`plugins-src\...\*.csproj` 里 `<Compile Include="...\XxxTool.cs" />`
+    /// 链接的那些工具类名。
+    ///
+    /// 读不到时返回空集合 —— 那样所有未注册的工具类都会被判为漏接线，
+    /// 是**偏严**的失败方向（宁可误报，也不放过真的漏接线）。
+    /// </summary>
+    private static HashSet<string> FindPluginToolNames()
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var root = FindSourceRoot();          // 形如 ...\src\Toolbox
+            if (string.IsNullOrEmpty(root))
+            {
+                return names;
+            }
+
+            // plugins-src 与 src 同级 ⇒ 从 src\Toolbox 往上两层
+            var projectRoot = Path.GetFullPath(Path.Combine(root, "..", ".."));
+            var pluginSrc = Path.Combine(projectRoot, "plugins-src");
+
+            if (!Directory.Exists(pluginSrc))
+            {
+                return names;
+            }
+
+            foreach (var csproj in Directory.GetFiles(pluginSrc, "*.csproj", SearchOption.AllDirectories))
+            {
+                var text = File.ReadAllText(csproj, System.Text.Encoding.UTF8);
+
+                foreach (System.Text.RegularExpressions.Match m in
+                         System.Text.RegularExpressions.Regex.Matches(text, @"([A-Za-z0-9_]+Tool)\.cs"))
+                {
+                    names.Add(m.Groups[1].Value);
+                }
+            }
+        }
+        catch
+        {
+            // 读不到就返回空集合 —— 偏严，宁可误报
+        }
+
+        return names;
     }
 
     /// <summary>
@@ -1838,6 +1939,151 @@ internal static class SelfTest
             Add("工具仓库：SHA-256 计算正确（公开测试向量）", false, ex.Message);
         }
     }
+
+    // ---------------------------------------------------------------- 插件机制
+
+    /// <summary>
+    /// B 阶段插件机制的用例。
+    ///
+    /// 这些**都不联网、也不真的加载第三方 dll** ——
+    /// 自检要能在任何环境下跑通。真正"装一个插件并让它跑起来"的验证
+    /// 由 artifacts\probe-plugin\ 与实机安装测试覆盖（已验：
+    /// 契约跨程序集匹配 / 单文件宿主 / WPF 插件 / 装了就出现、删了就消失）。
+    /// </summary>
+    private static void RunPluginTests()
+    {
+        // ---- 1. 契约版本兼容性判定 ----
+        //
+        // 这条防的是"用户装了一个针对旧版主程序编译的插件"——
+        // 没有它，那种插件会以各种看不懂的方式失败。
+        try
+        {
+            var sameOk = ContractsVersion.IsCompatible("1.0", out _);
+            var minorOk = ContractsVersion.IsCompatible("1.7", out _);   // 同主版本，向后兼容
+            var diffRejected = !ContractsVersion.IsCompatible("2.0", out var r1);
+            var emptyRejected = !ContractsVersion.IsCompatible("", out var r2);
+            var nullRejected = !ContractsVersion.IsCompatible(null, out _);
+
+            var ok = sameOk && minorOk && diffRejected && emptyRejected && nullRejected;
+
+            Add("插件：契约版本兼容判定（同主版本放行 / 跨主版本拒绝 / 空值拒绝）", ok,
+                ok
+                    ? $"当前 {ContractsVersion.Current}：1.0 ✅、1.7 ✅、2.0 ❌（{r1}）、空 ❌"
+                    : $"sameOk={sameOk} minorOk={minorOk} diffRejected={diffRejected} "
+                      + $"emptyRejected={emptyRejected} nullRejected={nullRejected} r2={r2}");
+        }
+        catch (Exception ex)
+        {
+            Add("插件：契约版本兼容判定（同主版本放行 / 跨主版本拒绝 / 空值拒绝）", false, ex.Message);
+        }
+
+        // ---- 2. 插件目录约定 ----
+        //
+        // 插件必须装在**数据目录**下，不能装到程序目录 ——
+        // 否则重装/升级程序会把用户装的插件冲掉。
+        try
+        {
+            var root = PluginLoader.PluginsRoot;
+            var one = PluginLoader.PluginDir("topmost");
+
+            var underData = root.StartsWith(AppPaths.Root, StringComparison.OrdinalIgnoreCase);
+            var separate = !string.Equals(one, root, StringComparison.OrdinalIgnoreCase);
+
+            var ok = underData && separate;
+
+            Add("插件：安装位置在数据目录下（重装程序不会丢）", ok,
+                ok ? $"插件根目录：{root}" : $"underData={underData} separate={separate} root={root}");
+        }
+        catch (Exception ex)
+        {
+            Add("插件：安装位置在数据目录下（重装程序不会丢）", false, ex.Message);
+        }
+
+        // ---- 3. 未装插件时 IsInstalled 必须是 false ----
+        //
+        // 这条防的是"IsInstalled 永远返回 true"这类假实现 ——
+        // 那会让界面把没装的插件显示成"已下载"。
+        try
+        {
+            var ghostId = "definitely-not-installed-" + Guid.NewGuid().ToString("N")[..8];
+            var ok = !PluginLoader.IsInstalled(ghostId);
+
+            Add("插件：未安装的插件 IsInstalled 为 false（防假实现）", ok,
+                ok ? $"查询不存在的插件「{ghostId}」→ false" : "★ 竟然返回 true");
+        }
+        catch (Exception ex)
+        {
+            Add("插件：未安装的插件 IsInstalled 为 false（防假实现）", false, ex.Message);
+        }
+
+        // ---- 4. 插件清单必须在 tools.json 里对得上 ----
+        //
+        // 防的是"插件做出来了、但清单里还写着 BuiltIn=true"，
+        // 那样界面会告诉用户"它内置了、不用下载"，而实际用不到。
+        try
+        {
+            var pluginIds = FindPluginToolNames();
+            var manifest = ToolStore.BuiltInManifest();
+
+            var problems = new List<string>();
+
+            foreach (var tool in manifest.Tools)
+            {
+                // 判定这个 Id 对应的实现类是不是插件
+                var isPluginImpl = pluginIds.Any(p =>
+                    string.Equals(p, ToolNameForId(tool.Id), StringComparison.OrdinalIgnoreCase));
+
+                if (isPluginImpl && tool.BuiltIn)
+                {
+                    problems.Add($"「{tool.Name}」的实现是插件，但清单里标成了内置");
+                }
+
+                // 标成"可下载"的必须有 AssetName 和 Sha256，否则装不了
+                if (!tool.BuiltIn)
+                {
+                    if (string.IsNullOrWhiteSpace(tool.AssetName))
+                    {
+                        problems.Add($"「{tool.Name}」标为可下载，却没有 AssetName");
+                    }
+
+                    if (string.IsNullOrWhiteSpace(tool.Sha256) || tool.Sha256.Length != 64)
+                    {
+                        problems.Add($"「{tool.Name}」标为可下载，却没有合法的 SHA-256");
+                    }
+                }
+            }
+
+            var ok = problems.Count == 0;
+
+            Add("插件：清单与实现一致（插件不标内置 / 可下载项必带哈希）", ok,
+                ok
+                    ? $"清单 {manifest.Tools.Count} 项核对通过；"
+                      + $"其中可下载 {manifest.Tools.Count(t => !t.BuiltIn)} 项都带了 AssetName 与 SHA-256"
+                    : "★ " + string.Join("；", problems));
+        }
+        catch (Exception ex)
+        {
+            Add("插件：清单与实现一致（插件不标内置 / 可下载项必带哈希）", false, ex.Message);
+        }
+    }
+
+    /// <summary>工具 Id → 实现类名的粗略映射（用于清单核对）。</summary>
+    private static string ToolNameForId(string id) => id switch
+    {
+        "clipboard" => "ClipboardTool",
+        "image" => "ImageCropTool",
+        "convert" => "ConvertTool",
+        "ai" => "AiTool",
+        "screenshot" => "ScreenshotTool",
+        "ocr" => "OcrTool",
+        "rename" => "BatchRenameTool",
+        "hash" => "HashCheckTool",
+        "qrcode" => "QrTool",
+        "topmost" => "WindowTopmostTool",
+        "run" => "CommandRunnerTool",
+        "archive" => "ArchiveTool",
+        _ => "",
+    };
 
     // ---------------------------------------------------------------- 功能开关
 

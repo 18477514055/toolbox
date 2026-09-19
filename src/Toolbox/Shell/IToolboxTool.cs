@@ -10,7 +10,7 @@ namespace Toolbox.Shell;
 /// 只需要新增一个 Tools\Xxx\ 目录 + 实现这个接口 + 在 ToolRegistry 里加一行，
 /// **不用动外壳的任何一行代码**。
 /// </summary>
-internal interface IToolboxTool
+public interface IToolboxTool
 {
     /// <summary>"clipboard" / "image" / "convert" / "ai"</summary>
     string Id { get; }
@@ -57,7 +57,7 @@ internal interface IToolboxTool
 /// <summary>
 /// 工具能用到的外壳能力。刻意只暴露这几个——工具不该能碰到别的东西。
 /// </summary>
-internal sealed class ToolboxContext
+public sealed class ToolboxContext
 {
     public required SettingsStore SettingsStore { get; init; }
     public Settings Settings => SettingsStore.Current;
@@ -89,4 +89,21 @@ internal sealed class ToolboxContext
     public required Action OpenSettings { get; init; }
 
     public void SaveSettings() => SettingsStore.Save();
+
+    /// <summary>
+    /// 重新扫描插件目录并热加载新插件（安装完插件后调用）。
+    ///
+    /// ⚠️ 用可空委托而不是 required，是**刻意的向后兼容安排**：
+    ///    这些是契约 1.0 之后**新增**的成员。用 required 会让
+    ///    "已按 1.0 编译的插件"在拼接 Context 时出问题；
+    ///    可空委托则调用方写 `?.Invoke()` 就行，新旧代码都不受影响。
+    ///    这也正是不提升 ContractsVersion 的原因 —— **只新增成员不算不兼容**。
+    /// </summary>
+    public Action? ReloadPlugins { get; init; }
+
+    /// <summary>
+    /// 让"功能开关"立刻生效（启停工具 + 重画悬浮窗 + 重注册热键）。
+    /// 安装完插件必须调用它，否则插件虽然被发现却不会启动。可空原因同上。
+    /// </summary>
+    public Action? ApplyToolSwitches { get; init; }
 }

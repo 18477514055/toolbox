@@ -4,7 +4,7 @@ using Directory = System.IO.Directory;
 
 namespace Toolbox.Tools.Convert;
 
-internal static class FileNaming
+public static class FileNaming
 {
     /// <summary>
     /// 永不覆盖：目标已存在就加 (1)、(2)…

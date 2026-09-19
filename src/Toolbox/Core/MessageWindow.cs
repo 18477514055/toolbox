@@ -10,7 +10,7 @@ namespace Toolbox.Core;
 /// 线程约定：窗口属于创建它的线程，所有消息都在该线程的 WndProc 上回调。
 /// 所以要收到剪贴板通知，调用方必须在该线程上跑消息循环（见 MessageThread）。
 /// </summary>
-internal sealed class MessageWindow : IDisposable
+public sealed class MessageWindow : IDisposable
 {
     private readonly NativeMethods.WndProcDelegate _proc; // 必须保引用，否则 GC 后回调会崩
     private readonly Func<uint, IntPtr, IntPtr, bool> _handler;

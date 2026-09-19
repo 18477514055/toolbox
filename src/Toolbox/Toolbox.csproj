@@ -91,4 +91,63 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!--
+      ★ B 阶段插件化：主程序引用【契约程序集】，而不是自己编译那批共享文件。
+      
+      这些文件（Log / AppPaths / Models / NativeMethods / Settings / IToolboxTool…）
+      现在由 Toolbox.Contracts 工程通过 <Compile Include Link> 链接编译。
+      主程序与插件**引用同一个** Toolbox.Contracts.dll ⇒ 类型身份唯一，
+      插件才能把 ToolboxContext 之类的对象安全地传给主程序。
+      
+      为什么必须这样做（而不是让插件直接引用主程序）：
+        主程序是单文件自包含 exe，磁盘上根本没有 Toolbox.dll 可给插件引用。
+      
+      ⚠️ 下面那批 <Compile Remove> 是**必须的**：SDK 默认会把本目录下的
+        .cs 全部编译，而 Core\ / Shell\ 里那些已经在契约工程里编过了，
+        不排除就会"同一个类型被定义两次"（CS0101）。
+    -->
+    <ProjectReference Include="..\Toolbox.Contracts\Toolbox.Contracts.csproj">
+      <!--
+        契约 dll 要**留在磁盘上**给插件用，所以不能被打进单文件。
+        
+        ★ 为什么必须这样（实测踩到，见 DECISIONS 坑 39）：
+          PublishSingleFile 默认把**所有**托管程序集塞进 exe。
+          契约一旦被塞进去，磁盘上就没有 Toolbox.Contracts.dll，
+          插件加载时解析不到它 ⇒ 插件根本起不来。
+          
+          必须用 ExcludeFromSingleFile 把它排除，让它**单独躺在 exe 旁边**。
+          代价：交付从"一个文件"变成"一个文件 + 一个 dll"——
+          这是插件化**无法回避**的代价（插件必须有个共同引用的实体）。
+      -->
+      <Private>true</Private>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 这些已在契约工程里编译，主程序里排除掉，避免重复定义 -->
+    <Compile Remove="Core\Log.cs" />
+    <Compile Remove="Core\AppPaths.cs" />
+    <Compile Remove="Core\Models.cs" />
+    <Compile Remove="Core\NativeMethods.cs" />
+    <Compile Remove="Core\ScreenCoordinateMapper.cs" />
+    <Compile Remove="Core\SelfWriteGuard.cs" />
+    <Compile Remove="Core\ClipboardReader.cs" />
+    <Compile Remove="Core\ClipboardWriter.cs" />
+    <Compile Remove="Core\ClipboardListener.cs" />
+    <Compile Remove="Core\ClipboardService.cs" />
+    <Compile Remove="Core\MessageWindow.cs" />
+    <Compile Remove="Core\MessageThread.cs" />
+
+    <Compile Remove="Shell\Settings.cs" />
+    <Compile Remove="Shell\IToolboxTool.cs" />
+    <Compile Remove="Shell\ToolGate.cs" />
+    <Compile Remove="Shell\FocusTracker.cs" />
+    <Compile Remove="Shell\ScreenPlacement.cs" />
+    <Compile Remove="Shell\BusyState.cs" />
+
+    <Compile Remove="Tools\Convert\FileNaming.cs" />
+  </ItemGroup>
+
 </Project>

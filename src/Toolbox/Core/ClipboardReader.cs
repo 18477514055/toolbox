@@ -21,7 +21,7 @@ namespace Toolbox.Core;
 ///   2. **绝不枚举全部格式**。GetFormats() 拿清单是安全的（不触发渲染），
 ///      但逐个 GetData 所有格式会触发全部延迟渲染，轻则慢，重则把源程序卡死。
 /// </summary>
-internal static class ClipboardReader
+public static class ClipboardReader
 {
     private const int MaxTextPreview = 200;
     private const int ReadAttempts = 4;

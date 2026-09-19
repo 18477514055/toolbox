@@ -20,7 +20,7 @@ namespace Toolbox.Core;
 /// ⚠️ 刻意**不做**的事：靠"来源进程"判断。GetClipboardOwner 常常返回 0，
 /// 第三方进程不可信。只做"我们自己写的我们标记"。
 /// </summary>
-internal static class SelfWriteGuard
+public static class SelfWriteGuard
 {
     /// <summary>放在剪贴板里的私有格式名。别的程序不认识，也不会用它。</summary>
     public const string SelfWriteFormat = "Toolbox.SelfWrite.Token";

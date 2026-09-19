@@ -8,7 +8,7 @@ namespace Toolbox.Core;
 /// 刻意不用 WinForms 的 NativeWindow 封装（见 DECISIONS.md 坑 1：
 /// 系统广播通知对窗口创建方式敏感，框架封装的那套收不到 WM_CLIPBOARDUPDATE）。
 /// </summary>
-internal static class NativeMethods
+public static class NativeMethods
 {
     // ---------------- 消息常量 ----------------
 

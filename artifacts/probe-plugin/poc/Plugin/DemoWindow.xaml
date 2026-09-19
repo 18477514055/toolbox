@@ -1,0 +1,9 @@
+﻿<Window x:Class="Poc.Plugin.DemoWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="插件自带的窗口" Width="380" Height="200">
+    <StackPanel Margin="16">
+        <TextBlock x:Name="HostInfo" FontSize="13" TextWrapping="Wrap" />
+        <Button x:Name="CloseBtn" Content="关闭" Width="80" Margin="0,14,0,0" />
+    </StackPanel>
+</Window>

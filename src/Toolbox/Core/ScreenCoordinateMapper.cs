@@ -23,7 +23,7 @@ namespace Toolbox.Core;
 /// 现在的做法：系数来自**目标显示器自己的 DPI**（dpi ÷ 96），
 /// 与 app.manifest 的 PerMonitorV2 保持一致。单屏下结果与原来完全相同（回归安全）。
 /// </summary>
-internal static class ScreenCoordinateMapper
+public static class ScreenCoordinateMapper
 {
     /// <summary>
     /// 把逻辑矩形换算成像素矩形（相对整张全屏位图的左上角）。
@@ -33,7 +33,7 @@ internal static class ScreenCoordinateMapper
     /// <param name="scaleY">逻辑 → 物理的纵向系数（= dpi / 96）。</param>
     /// <param name="bitmapWidth">全屏位图的像素宽（用于夹取越界）。</param>
     /// <param name="bitmapHeight">全屏位图的像素高。</param>
-    internal static Int32Rect ToPixelRect(
+    public static Int32Rect ToPixelRect(
         double logicalX, double logicalY, double logicalW, double logicalH,
         double scaleX, double scaleY,
         int bitmapWidth, int bitmapHeight)
@@ -71,7 +71,7 @@ internal static class ScreenCoordinateMapper
     ///   ② <c>GetDpiForMonitor(MDT_EFFECTIVE_DPI)</c>（Win8.1+，shcore.dll）；
     ///   ③ 失败就返回 1.0（等价于旧行为，绝不比原来更差）。
     /// </summary>
-    internal static double GetScaleForWindow(IntPtr hwnd)
+    public static double GetScaleForWindow(IntPtr hwnd)
     {
         if (hwnd != IntPtr.Zero)
         {

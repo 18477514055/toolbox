@@ -1,0 +1,100 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ═══════════════════════════════════════════════════════════════════════
+     Toolbox.Contracts —— 主程序与插件之间的**共享契约程序集**
+    ═══════════════════════════════════════════════════════════════════════
+
+    为什么需要它（B 阶段插件化的地基）：
+
+      插件是独立编译的 DLL，它要调用主程序的能力（写日志、读设置、写剪贴板…）。
+      两边若各自持有一份"同名类型"，运行时会认为是**两个不同类型**，
+      传参立刻失败（或更糟：静默的不一致）。
+
+      ⇒ 所以必须有一个**双方共同引用**的程序集，类型身份才唯一。
+      这就是 .NET 插件的标准做法。
+
+    三条实测确认的硬约束（都写进了 DECISIONS 坑 39）：
+
+      ① 插件与主程序引用**同一个** Toolbox.Contracts.dll（本工程）；
+      ② 主程序启动时要挂 AssemblyResolve 解析器，顺序：
+         宿主已加载 → 宿主目录 → 插件目录；
+      ③ 加载/实例化插件的代码必须在 **STA 线程**上（WPF 要求）。
+
+      实测还发现一条容易被忽略的：**主程序必须 UseWPF=true**，
+      否则 PresentationFramework 根本不进进程，插件的 WPF 窗口一加载就
+      ReflectionTypeLoadException —— 这条会很迷惑人，因为错误信息只说"找不到程序集"。
+
+    范围取舍（用户选定"共享库式契约"）：
+      本工程不只放接口，而是把**工具真正会用到的共享实现**都放进来
+      （日志 / 路径 / 设置 / 数据模型 / 剪贴板读写 / P-Invoke / DPI 换算…）。
+      这样插件的编译体验与"写在主程序里"几乎一样，改造面最小。
+
+      ⚠️ 代价要说清楚：它叫"Contracts"但其实是"共享运行时库"，
+        比纯接口契约大（约 20 个文件）。将来若要收紧边界，
+        可以把实现改成"接口 + 主程序注入"，但那是更大的重构。
+
+    ⚠️ 文件用 <Compile Include="../Toolbox/..." Link="..."/> **链接**进来，
+       而不是复制一份。**只有一个真身**，避免"改了主程序忘了改契约"这种分叉。
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+
+    <!-- 与主程序一致：契约里也用到 WPF 类型（BitmapSource / Int32Rect 等） -->
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <AssemblyName>Toolbox.Contracts</AssemblyName>
+    <RootNamespace>Toolbox</RootNamespace>
+
+    <NoWarn>$(NoWarn);CA1416;WFO0003</NoWarn>
+
+    <!--
+      插件要用它，所以**不能**把自己打成单文件 / 裁剪掉。
+      EnableDynamicLoading 会保证它适合被动态加载（保留必要的元数据）。
+    -->
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      链接共享源码（不是复制）。
+      下面这些是"工具会直接用到"的基础设施。
+    -->
+    <Compile Include="..\Toolbox\Core\Log.cs"                    Link="Core\Log.cs" />
+    <Compile Include="..\Toolbox\Core\AppPaths.cs"               Link="Core\AppPaths.cs" />
+    <Compile Include="..\Toolbox\Core\Models.cs"                 Link="Core\Models.cs" />
+    <Compile Include="..\Toolbox\Core\NativeMethods.cs"          Link="Core\NativeMethods.cs" />
+    <Compile Include="..\Toolbox\Core\ScreenCoordinateMapper.cs" Link="Core\ScreenCoordinateMapper.cs" />
+    <Compile Include="..\Toolbox\Core\SelfWriteGuard.cs"         Link="Core\SelfWriteGuard.cs" />
+    <Compile Include="..\Toolbox\Core\ClipboardReader.cs"        Link="Core\ClipboardReader.cs" />
+    <Compile Include="..\Toolbox\Core\ClipboardWriter.cs"        Link="Core\ClipboardWriter.cs" />
+    <Compile Include="..\Toolbox\Core\ClipboardListener.cs"      Link="Core\ClipboardListener.cs" />
+    <Compile Include="..\Toolbox\Core\ClipboardService.cs"       Link="Core\ClipboardService.cs" />
+    <Compile Include="..\Toolbox\Core\MessageWindow.cs"          Link="Core\MessageWindow.cs" />
+    <Compile Include="..\Toolbox\Core\MessageThread.cs"          Link="Core\MessageThread.cs" />
+
+    <Compile Include="..\Toolbox\Shell\Settings.cs"              Link="Shell\Settings.cs" />
+    <Compile Include="..\Toolbox\Shell\IToolboxTool.cs"          Link="Shell\IToolboxTool.cs" />
+    <Compile Include="..\Toolbox\Shell\ToolGate.cs"              Link="Shell\ToolGate.cs" />
+    <Compile Include="..\Toolbox\Shell\FocusTracker.cs"          Link="Shell\FocusTracker.cs" />
+    <Compile Include="..\Toolbox\Shell\ScreenPlacement.cs"       Link="Shell\ScreenPlacement.cs" />
+    <Compile Include="..\Toolbox\Shell\BusyState.cs"             Link="Shell\BusyState.cs" />
+
+    <Compile Include="..\Toolbox\Tools\Convert\FileNaming.cs"    Link="Tools\FileNaming.cs" />
+
+    <!-- PluginContracts.cs 在本目录里，SDK 会自动包含，不用显式写 -->
+  </ItemGroup>
+
+</Project>

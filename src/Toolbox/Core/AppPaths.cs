@@ -10,7 +10,7 @@ namespace Toolbox.Core;
 /// 刻意不放在项目目录里：项目目录是「源码」，这里是「用户数据」，两者生命周期不同。
 /// 源码可以随时被覆盖/重装，用户攒了半年的剪贴板历史不能跟着一起没。
 /// </summary>
-internal static class AppPaths
+public static class AppPaths
 {
     /// <summary>数据根目录名（%LOCALAPPDATA% 下的文件夹名 / 便携模式下的子目录名）。</summary>
     private const string FolderName = "桌面工具箱";

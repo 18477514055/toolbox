@@ -55,6 +55,7 @@ internal sealed partial class ToolStoreWindow : Window
 
         RefreshBtn.Click += async (_, _) => await RefreshAsync();
         DownloadBtn.Click += async (_, _) => await DownloadSelectedAsync();
+        RemoveBtn.Click += (_, _) => RemoveSelected();
         OpenRepoBtn.Click += (_, _) => OpenRepo();
         CloseBtn.Click += (_, _) => Close();
 
@@ -138,7 +139,7 @@ internal sealed partial class ToolStoreWindow : Window
             {
                 origin = string.IsNullOrWhiteSpace(t.AssetName) ? "清单未提供文件" : "可下载";
 
-                var downloaded = IsDownloaded(t.Id);
+                var downloaded = PluginLoader.IsInstalled(t.Id);
                 status = downloaded ? "已下载" : "未下载";
             }
 
@@ -216,45 +217,242 @@ internal sealed partial class ToolStoreWindow : Window
         Progress.Visibility = Visibility.Visible;
         Progress.Value = 0;
 
+        var tempDir = "";
+
         try
         {
-            var dir = Path.Combine(AppPaths.Root, "tools", pkg.Id);
-            Directory.CreateDirectory(dir);
+            // ★ 下载 + **安装**，不只是把文件扔到某个目录。
+            //
+            //   "下载完还要用户自己去解压、自己放到 plugins 目录" —— 那不叫按需下载，
+            //   那叫"给了你一个压缩包"。真正的安装要做完：
+            //     下载 → 校验哈希 → 解压 → 放到 plugins\<id>\ → 热加载 → 启用
+            var pluginDir = PluginLoader.PluginDir(pkg.Id);
+            Directory.CreateDirectory(pluginDir);
 
-            var savePath = Path.Combine(dir, pkg.AssetName);
+            tempDir = Path.Combine(Path.GetTempPath(), "toolbox-plugin-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+
+            var zipPath = Path.Combine(tempDir, pkg.AssetName);
 
             SetStatus($"正在下载「{pkg.Name}」…（会依次尝试直连与各个镜像）", isError: false);
 
             var progress = new Progress<double>(p => Progress.Value = p);
 
             var (ok, saved, source, error) = await ToolStore.DownloadAsync(
-                "", pkg.AssetName, $"v{pkg.Version}", pkg.Sha256, savePath, progress, CancellationToken.None);
+                "", pkg.AssetName, $"v{pkg.Version}", pkg.Sha256, zipPath, progress, CancellationToken.None);
 
-            if (ok)
-            {
-                var size = new FileInfo(saved).Length;
-                SetStatus($"「{pkg.Name}」下载完成（来自 {source}，{size:N0} 字节），SHA-256 校验通过。",
-                    isError: false);
-                _ctx.Notify("工具管理", $"「{pkg.Name}」下载完成。");
-            }
-            else
+            if (!ok)
             {
                 SetStatus($"下载失败：{error}", isError: true);
+                return;
             }
+
+            var size = new FileInfo(saved).Length;
+
+            // ---- 解压 ----
+            //
+            // ⚠️ 只接受 .dll，**且必须防止 Zip Slip**：
+            //    恶意/损坏的压缩包可能含 `..\..\` 这类路径，
+            //    直接 ExtractToDirectory 会写到目标目录外面去。
+            //    .NET 的 ExtractToDirectory 本身已做防护（会抛异常），
+            //    但这里仍然逐个校验一次 —— 因为它只抛异常、不告诉我们哪个条目坏。
+            SetStatus("校验通过，正在安装…", isError: false);
+
+            var installed = 0;
+
+            using (var zip = System.IO.Compression.ZipFile.OpenRead(zipPath))
+            {
+                foreach (var entry in zip.Entries)
+                {
+                    // 目录条目跳过
+                    if (string.IsNullOrEmpty(entry.Name))
+                    {
+                        continue;
+                    }
+
+                    if (!entry.Name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // 插件包里只应放 dll；别的文件一律不落盘
+                        Log.Line($"插件包里的非 dll 条目已跳过：{entry.FullName}");
+                        continue;
+                    }
+
+                    // 只取文件名，**丢掉任何目录结构** ——
+                    // 这样即使压缩包里写了 ..\..\ 也绝不会跑出目标目录
+                    var target = Path.Combine(pluginDir, Path.GetFileName(entry.Name));
+
+                    // 再确认一次最终路径确实在插件目录内
+                    if (!Path.GetFullPath(target).StartsWith(
+                            Path.GetFullPath(pluginDir) + Path.DirectorySeparatorChar,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        Log.Error($"插件包条目路径非法，已拒绝：{entry.FullName}");
+                        continue;
+                    }
+
+                    // 用流复制而不是 ZipFileExtensions.ExtractToFile：
+                    //   ① 那个扩展方法在 System.IO.Compression.ZipFileExtensions 里，
+                    //      要多一个 using；自己拷更直白；
+                    //   ② 更重要的是这里**已经**把目标路径算好并校验过了，
+                    //      不想再让库去碰路径（避免绕过我们的 Zip Slip 检查）。
+                    using (var input = entry.Open())
+                    using (var output = File.Create(target))
+                    {
+                        input.CopyTo(output);
+                    }
+
+                    installed++;
+                }
+            }
+
+            if (installed == 0)
+            {
+                SetStatus($"「{pkg.Name}」安装失败：压缩包里没有可用的 dll。", isError: true);
+                try { Directory.Delete(pluginDir, true); } catch { }
+                return;
+            }
+
+            // ---- 热加载 + 启用 ----
+            _ctx.ReloadPlugins?.Invoke();
+
+            // 装完就**默认启用** —— 用户点"安装"的意思就是要用它。
+            // 不自动开的话，他还要再去设置里找一遍开关，很别扭。
+            EnableToolAfterInstall(pkg.Id);
+
+            SetStatus(
+                $"「{pkg.Name}」已安装并启用（来自 {source}，{size:N0} 字节，SHA-256 校验通过）。\n"
+                + $"装了 {installed} 个文件到 {pluginDir}\n"
+                + "功能已经可以用了 —— 悬浮窗上会出现它的按钮。",
+                isError: false);
+
+            _ctx.Notify("工具管理", $"「{pkg.Name}」已安装并启用。");
 
             Rebuild(null, null);
         }
         catch (Exception ex)
         {
-            Log.Exception("下载工具失败", ex);
-            SetStatus($"下载出错：{ex.Message}", isError: true);
+            Log.Exception("安装插件失败", ex);
+            SetStatus($"安装出错：{ex.Message}", isError: true);
         }
         finally
         {
+            if (tempDir.Length > 0)
+            {
+                try { Directory.Delete(tempDir, true); } catch { }
+            }
+
             _busy = false;
             DownloadBtn.IsEnabled = true;
             Progress.Visibility = Visibility.Collapsed;
         }
+    }
+
+    /// <summary>
+    /// 安装后把这个工具打开（写进设置并立刻生效）。
+    ///
+    /// 直接改设置而不是调 ToolGate：ToolGate 是只读判定，
+    /// 这里要真的**改用户设置**，两件事不能混。
+    /// </summary>
+    private void EnableToolAfterInstall(string toolId)
+    {
+        try
+        {
+            var s = _ctx.Settings;
+
+            // 与默认一致就移除条目（和设置窗口的保存逻辑保持同一套语义）
+            if (ToolGate.IsDefaultOn(toolId))
+            {
+                s.ToolEnabled.Remove(toolId);
+            }
+            else
+            {
+                s.ToolEnabled[toolId] = true;
+            }
+
+            _ctx.SaveSettings();
+            _ctx.ApplyToolSwitches?.Invoke();
+
+            Log.Line($"安装后已启用工具：{toolId}");
+        }
+        catch (Exception ex)
+        {
+            Log.Exception($"安装后启用工具失败：{toolId}", ex);
+        }
+    }
+
+    /// <summary>
+    /// 卸载选中的插件。
+    ///
+    /// ⚠️ 这里**必须如实说明一件事**：已加载的程序集在 .NET 里
+    ///    **无法真正卸载**（默认 ALC 不支持）。所以：
+    ///      · 文件能删掉（下次启动就不会再加载）；
+    ///      · 但**本次运行期间**这个工具仍然在内存里、仍然能用。
+    ///    界面必须说清"重启后彻底消失"，而不是显示"已卸载" ——
+    ///    后者会让用户以为功能立刻没了，一看还在，就不再信任这个按钮。
+    /// </summary>
+    private void RemoveSelected()
+    {
+        var row = ToolGrid.SelectedItem as StoreRow;
+
+        if (row?.Package is null)
+        {
+            SetStatus("先在列表里选一个工具。", isError: true);
+            return;
+        }
+
+        var pkg = row.Package;
+
+        if (pkg.BuiltIn)
+        {
+            SetStatus($"「{pkg.Name}」是随主程序内置的，不能卸载。\n"
+                      + "不想用它的请在「设置 → 功能开关」里关掉。", isError: false);
+            return;
+        }
+
+        if (!PluginLoader.IsInstalled(pkg.Id))
+        {
+            SetStatus($"「{pkg.Name}」没有安装，不需要卸载。", isError: false);
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            this,
+            $"确定要卸载「{pkg.Name}」吗？\n\n"
+            + "插件文件会被删除。\n"
+            + "注意：本次运行期间它仍然可用（.NET 无法卸载已加载的程序集），"
+            + "重启工具箱后它就彻底消失了。",
+            "卸载插件",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Question);
+
+        if (confirm != MessageBoxResult.OK)
+        {
+            return;
+        }
+
+        if (!PluginLoader.Remove(pkg.Id, out var error))
+        {
+            SetStatus(error ?? "卸载失败。", isError: true);
+            return;
+        }
+
+        // 顺手把开关也关掉 —— 不然设置里会留一条"已启用的工具"却找不到实现
+        try
+        {
+            _ctx.Settings.ToolEnabled[pkg.Id] = false;
+            _ctx.SaveSettings();
+        }
+        catch (Exception ex)
+        {
+            Log.Exception("卸载后清理开关失败", ex);
+        }
+
+        SetStatus(
+            $"「{pkg.Name}」已卸载（文件已删除）。\n"
+            + "⚠️ 本次运行期间它仍然可用 —— 重启工具箱后就彻底没有了。",
+            isError: false);
+
+        Rebuild(null, null);
     }
 
     private void OpenRepo()

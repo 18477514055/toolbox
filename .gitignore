@@ -22,3 +22,11 @@ share/
 
 # 临时备份
 *.bak
+
+# 插件工程的构建产物
+plugins-src/**/bin/
+plugins-src/**/obj/
+
+# 探针工程里的构建产物（含单文件发布的成品）
+artifacts/**/single/
+artifacts/**/plugins/

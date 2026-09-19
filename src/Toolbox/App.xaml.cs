@@ -194,9 +194,30 @@ internal partial class App : Application
         _registry.Add(new BatchRenameTool());
         _registry.Add(new HashCheckTool());
         _registry.Add(new QrTool());
-        _registry.Add(new WindowTopmostTool());
         _registry.Add(new CommandRunnerTool());
         _registry.Add(new ArchiveTool());
+
+        // ⚠️ 注意：`WindowTopmostTool` **不再在这里注册**了。
+        //
+        //   从 B 阶段起，「窗口置顶」被拆成了**可下载插件**（plugins\topmost\），
+        //   用来跑通整条插件链路。它的源码仍在 src\Toolbox\Tools\WindowTopmost\
+        //   （插件工程用 <Compile Include Link> 共享同一份，杜绝分叉），
+        //   但主程序**不再把它编进自己**。
+        //
+        //   为什么不保留"内置 + 插件"双份：那会造成 Id 冲突，
+        //   加载器会明确拒绝插件（这条守卫已实测有效）。
+        //   而这正是"按需下载"该有的样子 —— 用户没装，就没这个功能。
+
+        // ---------- 插件加载（B 阶段）----------
+        //
+        // ★ 必须在**这里**做，也就是 `OnStartup` 里（UI 线程 = STA）。
+        //   插件里的窗口是 WPF 对象，只能建在 STA 线程上。
+        //   放到任何后台线程都会以 `调用线程必须为 STA` 失败。
+        //
+        // ★ 顺序也重要：要在 **工具注册之后、StartAll 之前**。
+        //   这样插件工具能和内置工具一起进入同一套
+        //   "开关判定 / 热键注册 / 悬浮窗显示"流程，不需要任何特殊照顾。
+        LoadPlugins();
 
         _ctx = new ToolboxContext
         {
@@ -255,6 +276,8 @@ internal partial class App : Application
             SuppressFloating = () => _floating?.Suppress() ?? new NoopDisposable(),
             RefreshFloating = () => _floating?.BuildButtons(),
             OpenSettings = OpenSettings,
+            ReloadPlugins = ReloadPlugins,
+            ApplyToolSwitches = ApplyToolSwitches,
         };
 
         // 记下"实际起来的工具"，供 ApplyToolSwitches 判断谁该停
@@ -963,7 +986,107 @@ internal partial class App : Application
         _tray?.SetToolsEnabled(settings.ToolsEnabled);
     }
 
-    /// <summary>正在运行的工具 Id（避免重复 Start / 漏掉 Stop）。</summary>
+    /// <summary>
+    /// 加载插件目录里的工具插件，并把它们注册进 registry。
+    ///
+    /// 设计要点：
+    ///   · **失败不影响启动** —— 插件坏了只是少一个工具，
+    ///     绝不能让整个工具箱起不来（那是最糟的失败模式）；
+    ///   · 失败原因**收集起来**，在启动完成后用托盘气泡统一说 ——
+    ///     用模态框会打断开机（见 `_startupWarnings` 的说明）；
+    ///   · 插件的工具与内置工具**完全同权**：同样受功能开关管、
+    ///     同样参与热键注册与悬浮窗显示，不搞特殊。
+    /// </summary>
+    private void LoadPlugins()
+    {
+        if (_registry is null)
+        {
+            return;
+        }
+
+        try
+        {
+            Tools.Store.PluginLoader.EnsureResolver();
+
+            var ids = _registry.Tools.Select(t => t.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var report = Tools.Store.PluginLoader.LoadAll(ids);
+
+            foreach (var tool in report.Loaded)
+            {
+                _registry.Add(tool);
+            }
+
+            if (report.Loaded.Count > 0)
+            {
+                Log.Line($"插件加载完成：成功 {report.Loaded.Count} 个。");
+            }
+
+            foreach (var err in report.Errors)
+            {
+                _startupWarnings?.Add($"插件问题：{err}");
+            }
+        }
+        catch (Exception ex)
+        {
+            // 插件系统本身出问题也不能拖垮启动
+            Log.Exception("插件加载流程失败", ex);
+            _startupWarnings?.Add($"插件加载失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 重新扫描插件（用户刚下载/删除了插件时调用）。
+    ///
+    /// ⚠️ 已删除的插件**无法真正卸载**（.NET 默认上下文不支持卸载程序集），
+    ///    所以这里只做"新增"：删掉的插件要重启工具箱才真正消失。
+    ///    这一点在界面上要如实告诉用户，不能说"已卸载"。
+    /// </summary>
+    internal void ReloadPlugins()
+    {
+        if (_registry is null)
+        {
+            return;
+        }
+
+        var before = _registry.Tools.Select(t => t.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        LoadPlugins();
+
+        var added = _registry.Tools
+            .Where(t => !before.Contains(t.Id))
+            .ToList();
+
+        if (added.Count > 0)
+        {
+            // 新插件要立刻能用：启动它 + 重算界面
+            foreach (var tool in added)
+            {
+                if (!ToolGate.IsEnabled(_settingsStore!.Current, tool.Id))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    tool.Start(_ctx!);
+                    _toolsRunning.Add(tool.Id);
+                }
+                catch (Exception ex)
+                {
+                    Log.Exception($"启动新插件失败：{tool.Id}", ex);
+                }
+            }
+
+            ApplyHotKeys(false);
+            _floating?.BuildButtons();
+            RefreshTrayToolsMenu();
+
+            Log.Line($"已热加载 {added.Count} 个新插件。");
+        }
+    }
+
+    /// <summary>
+    /// 正在运行的工具 Id（避免重复 Start / 漏掉 Stop）。
+    /// </summary>
     private readonly HashSet<string> _toolsRunning = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>

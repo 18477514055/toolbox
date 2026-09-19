@@ -13,7 +13,7 @@ namespace Toolbox.Shell;
 ///   所以全部走这里。加新工具时**只需要在这里的 <see cref="DefaultOn"/> 里登记一次**
 ///   默认是开还是关，其余地方自动跟随。
 /// </summary>
-internal static class ToolGate
+public static class ToolGate
 {
     /// <summary>
     /// 首次运行时默认**开启**的工具。

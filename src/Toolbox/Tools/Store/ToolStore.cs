@@ -178,7 +178,16 @@ internal static class ToolStore
                     Description = "算 MD5 / SHA256，比对文件是否一致", DefaultHotKey = "Win+Alt+H" },
             new() { Id = "qrcode", Name = "二维码工具", Glyph = "▩", BuiltIn = true,
                     Description = "生成 / 扫描二维码", DefaultHotKey = "Win+Alt+Q" },
-            new() { Id = "topmost", Name = "窗口置顶", Glyph = "📌", BuiltIn = true,
+            // ★ B 阶段起：「窗口置顶」是**可下载插件**，不再随主程序一起装。
+            //
+            //   它在这份内置清单里也必须标成 BuiltIn=false ——
+            //   否则界面会告诉用户"它是内置的、不用下载"，
+            //   而实际上用户没装插件就用不到它（界面与事实不符）。
+            new() { Id = "topmost", Name = "窗口置顶", Glyph = "📌", BuiltIn = false,
+                    Version = "1.0.0",
+                    AssetName = "Toolbox-Plugin-WindowTopmost-v1.0.0.zip",
+                    Sha256 = "2288C5F873324DFAAA175CAF680555D407BFAD0C01AC4EC201CE8C9FBCA4FDCA",
+                    Size = 4315,
                     Description = "把当前窗口置顶 / 取消置顶", DefaultHotKey = "Win+Alt+P" },
             new() { Id = "run", Name = "运行命令", Glyph = ">_", BuiltIn = true,
                     Description = "输入命令交给 cmd / PowerShell",

@@ -12,7 +12,7 @@ namespace Toolbox.Core;
 ///
 /// 线程约定：必须在 STA 线程上 Start()，且该线程要跑消息循环。
 /// </summary>
-internal sealed class ClipboardListener : IDisposable
+public sealed class ClipboardListener : IDisposable
 {
     private readonly MessageWindow _window;
     private bool _registered;

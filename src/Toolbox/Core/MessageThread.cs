@@ -9,7 +9,7 @@ namespace Toolbox.Core;
 /// 读取剪贴板带重试（延迟渲染时最长会等 60+120+240ms），
 /// 挂在 UI 线程上会让界面在这段时间里卡住。探针当初就是这么做的，实测没问题，沿用它。
 /// </summary>
-internal sealed class MessageThread : IDisposable
+public sealed class MessageThread : IDisposable
 {
     private readonly string _name;
     private readonly Action<MessageThread> _onReady;

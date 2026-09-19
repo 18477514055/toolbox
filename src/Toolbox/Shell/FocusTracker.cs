@@ -14,7 +14,7 @@ namespace Toolbox.Shell;
 /// 后者一步到位地排除了悬浮窗和所有工具箱面板（它们全在本进程里），
 /// 不需要自己维护"哪些窗口是自己的"名单——那种名单迟早会漏。
 /// </summary>
-internal sealed class FocusTracker : IDisposable
+public sealed class FocusTracker : IDisposable
 {
     private readonly NativeMethods.WinEventDelegate _callback; // 保引用
     private IntPtr _hook;

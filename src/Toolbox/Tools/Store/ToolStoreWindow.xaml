@@ -76,7 +76,8 @@
             </StackPanel>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal">
-                <Button x:Name="DownloadBtn" Content="下载/更新选中" Width="118" Height="32" Margin="0,0,8,0" />
+                <Button x:Name="DownloadBtn" Content="安装 / 更新" Width="106" Height="32" Margin="0,0,8,0" />
+                <Button x:Name="RemoveBtn" Content="卸载" Width="72" Height="32" Margin="0,0,8,0" />
                 <Button x:Name="OpenRepoBtn" Content="打开仓库" Width="88" Height="32" Margin="0,0,8,0" />
                 <Button x:Name="CloseBtn" Content="关闭" Width="72" Height="32" />
             </StackPanel>

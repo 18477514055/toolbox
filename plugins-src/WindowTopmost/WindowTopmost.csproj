@@ -1,0 +1,86 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ═══════════════════════════════════════════════════════════════════
+     窗口置顶 —— 第一个**可下载插件**（B 阶段的样板）
+    ═══════════════════════════════════════════════════════════════════
+
+    为什么选它做第一个插件：
+      · 它是 12 个工具里**唯一不带 XAML** 的（纯动作型，按一下就完事）；
+      · 依赖最少（只用到 NativeMethods / Log / IToolboxTool / ToolboxContext）；
+      · 逻辑已经过验收，搬过来不用改业务代码。
+      ⇒ 用它把"插件能装、能跑、能卸"这条链路打通，风险最小。
+
+    这个工程同时是**后续插件的模板**：
+      照抄它的 csproj，把源文件换成你的工具即可。
+
+    ⚠️ 三个必须照抄的地方（缺一个插件就起不来，见 DECISIONS 坑 39）：
+
+      ① 引用 Toolbox.Contracts，并且 **Private=false + ExcludeAssets=runtime**
+         —— 契约由**主程序**提供，插件绝不能自带一份，
+            否则会出现"两个同名类型"，主程序认不出插件的工具。
+
+      ② 目标框架 / UseWPF 必须与主程序一致
+         —— 不一致会导致契约的二进制不兼容。
+
+      ③ 打上 [assembly: ToolboxPlugin(...)] 清单特性
+         —— 主程序靠它**在实例化之前**就知道插件的 Id / 版本 / 契约版本，
+            从而能对账、能明确拒绝不兼容的插件。
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+
+    <!-- 与主程序保持一致（契约里有 WPF 类型） -->
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <AssemblyName>Toolbox.Plugin.WindowTopmost</AssemblyName>
+    <RootNamespace>Toolbox.Tools.WindowTopmost</RootNamespace>
+
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+
+    <!-- 插件要能被主程序按文件加载，别把它也做成单文件 -->
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+
+    <Version>1.0.0</Version>
+    <NoWarn>$(NoWarn);CA1416;WFO0003</NoWarn>
+
+    <!-- 插件清单（主程序先读它，再决定要不要实例化） -->
+    <ToolboxPluginId>topmost</ToolboxPluginId>
+    <ToolboxPluginName>窗口置顶</ToolboxPluginName>
+    <ToolboxPluginContracts>1.0</ToolboxPluginContracts>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      ★ 契约引用：**不复制到输出**。
+      插件目录里只应有插件自己的 dll，契约由主程序提供。
+    -->
+    <ProjectReference Include="..\..\src\Toolbox.Contracts\Toolbox.Contracts.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 业务实现直接**链接**主程序里那份，杜绝两份分叉 -->
+    <Compile Include="..\..\src\Toolbox\Tools\WindowTopmost\TopmostService.cs"
+             Link="TopmostService.cs" />
+    <Compile Include="..\..\src\Toolbox\Tools\WindowTopmost\WindowTopmostTool.cs"
+             Link="WindowTopmostTool.cs" />
+    <!-- PluginManifest.cs 在本目录里，SDK 会自动包含 -->
+  </ItemGroup>
+
+</Project>

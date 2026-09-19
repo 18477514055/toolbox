@@ -15,7 +15,7 @@ namespace Toolbox.Core;
 /// 桌面程序是 WinExe，通常没有控制台，所以这里的 Console 分支基本走不到——
 /// 保留它是为了 `--selftest` 这种带控制台的场景。
 /// </summary>
-internal static class Log
+public static class Log
 {
     private static readonly object Gate = new();
     private static string? _path;

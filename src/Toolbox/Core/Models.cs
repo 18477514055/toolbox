@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Toolbox.Core;
 
-internal enum ClipKind
+public enum ClipKind
 {
     Text,
     Image,
@@ -20,7 +20,7 @@ internal enum ClipKind
 ///   Thumb   —— 缩略图相对路径，列表用它，避免为了显示一行去解码原图。
 ///   Volatile—— 超长正文的外置文件（档案里只留一行摘要）。
 /// </summary>
-internal sealed class ClipEntry
+public sealed class ClipEntry
 {
     public int Seq { get; set; }
     public string Time { get; set; } = "";
@@ -66,7 +66,7 @@ internal sealed class ClipEntry
     public DateTime TimeValue => DateTime.TryParse(Time, out var t) ? t : DateTime.MinValue;
 }
 
-internal sealed class ClipFile
+public sealed class ClipFile
 {
     public string Path { get; set; } = "";
     public bool Exists { get; set; }
@@ -80,7 +80,7 @@ internal sealed class ClipFile
 /// 为什么元数据和载荷分开：元数据进 JSONL（要小、要能全文扫描），
 /// 载荷可能很大（一篇 5 万字文章、一张 4K 截图），要么外置要么丢弃。
 /// </summary>
-internal sealed class ClipReadResult
+public sealed class ClipReadResult
 {
     public ClipEntry Entry { get; set; } = new();
 

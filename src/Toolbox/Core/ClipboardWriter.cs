@@ -15,7 +15,7 @@ namespace Toolbox.Core;
 /// ⚠️ 注意：这里写剪贴板是「用户主动要的」动作（复制历史条目 / 复制译文），
 /// 属于规则③允许的范围。**工具自己为了搬数据偷偷写剪贴板仍然禁止。**
 /// </summary>
-internal static class ClipboardWriter
+public static class ClipboardWriter
 {
     private const int WriteAttempts = 4;
     private const int FirstRetryDelayMs = 60;

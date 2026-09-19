@@ -8,7 +8,7 @@ namespace Toolbox.Shell;
 /// 然后重复点击、或者直接去任务管理器结束进程。
 /// 交接文档把「AI 流式生成时图标显示进度环」列为悬浮窗的必备特性。
 /// </summary>
-internal static class BusyState
+public static class BusyState
 {
     private static readonly object Gate = new();
     private static readonly Dictionary<string, string> Busy = new(StringComparer.OrdinalIgnoreCase);

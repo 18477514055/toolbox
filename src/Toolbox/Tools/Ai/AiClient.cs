@@ -44,3 +44,38 @@ internal static class AiClientFactory
             ? new RemoteAiClient(s.RemoteApiUrl, s.RemoteApiKey, s.RemoteModel)
             : new OllamaClient(s.OllamaUrl, s.OllamaModel);
 }
+
+/// <summary>
+/// 探活结果该显示成什么颜色。
+///
+/// ⚠️ 放成一处，而不是在每个调用点各写一遍判断。
+///   这正是本轮刚踩过的坑（见 DECISIONS 坑 49）：
+///   "选目录"这个功能在 4 个地方各自 new 了不同的对话框，
+///   于是一处坏、三处好，用户看到的现象完全无法解释。
+///
+/// 为什么需要"警告色"这个中间档：
+///   Ok=true 只有两种情况 —— 真的全好，或者"连上了但模型名可疑"。
+///   后者不该是绿的（用户会以为一切正常），也不该是红的
+///   （红在面板里是硬拦截，会把一个其实能用的 AI 功能禁掉）。
+///   所以给一个黄色：告诉你"这里有点不对，但不挡你路"。
+/// </summary>
+internal static class AiCheckUi
+{
+    /// <summary>可疑但不拦路的提示，消息里带这个前缀。</summary>
+    public const string WarnPrefix = "⚠";
+
+    /// <summary>该消息是不是"警告级"（连上了，但有地方可疑）。</summary>
+    public static bool IsWarning(string? message) =>
+        !string.IsNullOrEmpty(message)
+        && message.TrimStart().StartsWith(WarnPrefix, StringComparison.Ordinal);
+
+    /// <summary>探活结果对应的文字颜色。</summary>
+    public static System.Windows.Media.Color ColorFor(bool ok, string? message) => ok switch
+    {
+        false => System.Windows.Media.Color.FromRgb(0xE0, 0x3B, 0x3B),   // 红：真不通
+        true when IsWarning(message)
+            => System.Windows.Media.Color.FromRgb(0xD9, 0x7A, 0x06),      // 黄：能用但可疑
+        _ => System.Windows.Media.Color.FromRgb(0x12, 0xA1, 0x50),        // 绿：一切正常
+    };
+}
+

@@ -75,12 +75,47 @@ internal sealed class RemoteAiClient : IAiClient
                     new List<string>());
             }
 
-            var models = ParseModelNames(body);
-            var message = models.Count > 0
-                ? $"连接正常，远端提供 {models.Count} 个模型（当前使用 {_model}）。"
+            var names = ParseModelNames(body);
+
+            // ★ 连上了还要看**用户填的模型名在不在列表里**，否则是"假绿灯"。
+            //
+            //   为什么（实测抓到的）：用户设置里填的是 `Qwen3-8B`，
+            //   服务真实存在的名字是 `Qwen/Qwen3-8B`（少了组织前缀）。
+            //   原来的实现报"连接正常，远端提供 95 个模型（当前使用 Qwen3-8B）"
+            //   —— 全绿；可真去用会得到一句 `400 错误的请求`，
+            //   而那句话完全看不出是模型名写错了。
+            //
+            // ⚠️ 但这里**不能返回 Ok=false**。
+            //   面板把 Ok=false 当硬拦截（AiPanel 里 !ok 直接 return，AI 就彻底不能用了），
+            //   而有些网关的 /models 只返回**部分**模型（按 key 权限裁剪、分页、
+            //   或干脆没实现）—— 那种情况下用户填的名字其实可用，却被我拦死。
+            //   **假红灯比假绿灯更糟：它把本来能用的功能整个禁掉了。**
+            //
+            //   所以 Ok 仍表示"连得上"，可疑之处写进消息（⚠ 前缀），
+            //   由界面据此显示成黄色而不是绿色。
+            if (names.Count > 0 && !names.Any(n =>
+                    string.Equals(n, _model, StringComparison.OrdinalIgnoreCase)))
+            {
+                var suggestions = ModelDiscovery.SuggestFor(
+                    names.Select(n => new ModelInfo(n, null)).ToList(), _model);
+
+                var message = suggestions.Count > 0
+                    ? $"⚠ 连得上，但模型名「{_model}」不在这个服务返回的 {names.Count} 个模型里，"
+                      + $"真去用多半会报错。\n   是不是想填：{string.Join("、", suggestions)}\n"
+                      + "   （点「查找模型」可以直接从列表里选，不用手敲。）"
+                    : $"⚠ 连得上，但模型名「{_model}」不在这个服务返回的 {names.Count} 个模型里，"
+                      + "真去用多半会报错。点「查找模型」从列表里挑一个。\n"
+                      + "   （也可能是这个服务没把全部模型列出来 —— 那就无需改动。）";
+
+                return (true, message, names);
+            }
+
+            var models = names;
+            var msg = models.Count > 0
+                ? $"连接正常，远端提供 {models.Count} 个模型，模型名「{_model}」确认存在。"
                 : $"连接正常（远端没返回模型清单，仍会尝试用 {_model}）。";
 
-            return (true, message, models);
+            return (true, msg, models);
         }
         catch (OperationCanceledException)
         {

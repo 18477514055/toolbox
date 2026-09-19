@@ -85,6 +85,12 @@
 | 文档 / PDF 转换 | LibreOffice **或** Microsoft Office（不装则该格子不可用，不影响其它） |
 | RAR 打包 | **需要装 WinRAR** —— RAR 是专有格式，其压缩算法受许可保护，任何人都不能合法地把"创建 RAR"打进自己的软件分发 |
 
+> 💡 **AI 不用手敲模型名**：设置 → 快捷 AI 里，模型名是下拉框 + 「查找模型」按钮。
+> 远端走 `GET {base}/models`（OpenAI 约定），本地 Ollama 走 `GET {base}/api/tags`（Ollama 自己的协议）。
+> 模型名写错时会给出正确写法（例：`Qwen3-8B` → `Qwen/Qwen3-8B`）——
+> 这种情况真去调用只会得到一句看不出原因的 `400 错误的请求`。
+> 下拉框仍可直接打字，所以那些没把全部模型列出来的服务照样能填。
+
 ---
 
 ## 从源码构建
@@ -98,7 +104,7 @@ dotnet build src\Toolbox\Toolbox.csproj -c Release
 # 发布单文件
 dotnet publish src\Toolbox\Toolbox.csproj -c Release -o dist
 
-# 自检（80 项左右，含真实功能的端到端验证）
+# 自检（117 项，含真实功能的端到端验证）
 dist\Toolbox.exe --selftest
 ```
 

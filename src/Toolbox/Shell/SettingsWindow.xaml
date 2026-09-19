@@ -149,7 +149,15 @@
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <TextBlock Text="模型名" VerticalAlignment="Center" Width="110" />
-                                <TextBox x:Name="OllamaModelBox" Width="300" />
+                                <!--
+                                  用 IsEditable 的 ComboBox 而不是 TextBox：
+                                    · 点「查找」后可以**从列表里选**，不用手敲；
+                                    · 仍然可以直接打字 —— 有些后端查不到列表（或没实现 /models），
+                                      那种情况下手填是唯一出路，不能把它堵死。
+                                -->
+                                <ComboBox x:Name="OllamaModelCombo" Width="300" IsEditable="True" />
+                                <Button x:Name="FetchOllamaModelsBtn" Content="查找模型" Style="{StaticResource Btn}"
+                                        Margin="8,0,0,0" />
                             </StackPanel>
                         </StackPanel>
 
@@ -165,10 +173,14 @@
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <TextBlock Text="模型名" VerticalAlignment="Center" Width="110" />
-                                <TextBox x:Name="RemoteModelBox" Width="300" />
+                                <ComboBox x:Name="RemoteModelCombo" Width="300" IsEditable="True" />
+                                <Button x:Name="FetchRemoteModelsBtn" Content="查找模型" Style="{StaticResource Btn}"
+                                        Margin="8,0,0,0" />
                             </StackPanel>
                             <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" MaxWidth="430" HorizontalAlignment="Left"
                                        Text="例：https://api.deepseek.com/v1 ＋ deepseek-chat ｜ https://api.openai.com/v1 ＋ gpt-4o-mini。地址不带 /v1 会自动补。Key 明文存在本机 settings.json 里，别用共享账号的主 Key。" />
+                            <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" MaxWidth="430" HorizontalAlignment="Left"
+                                       Text="💡 填好地址和 Key 后点「查找模型」，就能从服务商返回的列表里直接选，不用手敲模型名。" />
                         </StackPanel>
 
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
@@ -177,7 +189,7 @@
                             <TextBlock Text="（超长文本按这个粒度分块，太大明显变慢）" Style="{StaticResource Hint}" Margin="8,0,0,0" VerticalAlignment="Center" />
                         </StackPanel>
                         <CheckBox x:Name="MainContentBox" Content="整窗口读取时默认只取主内容区（自动去掉首尾导航/页脚）" Margin="0,8,0,0" />
-                        <TextBlock x:Name="OllamaStatus" Style="{StaticResource Hint}" TextWrapping="Wrap" MaxWidth="420" HorizontalAlignment="Left" />
+                        <TextBlock x:Name="OllamaStatus" Style="{StaticResource Hint}" TextWrapping="Wrap" MaxWidth="520" HorizontalAlignment="Left" />
                         <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                             <Button x:Name="TestOllamaBtn" Content="测试连接" Style="{StaticResource Btn}" />
                         </StackPanel>

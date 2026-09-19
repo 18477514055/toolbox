@@ -93,6 +93,7 @@ internal static class SelfTest
             RunToolSwitchTests();
             RunToolStoreTests();
             RunPluginTests();
+            RunModelDiscoveryTests();
             RunFloatingWindowTests();
             RunCommandWindowTests();
             RunAutoStartTests();
@@ -2019,6 +2020,357 @@ internal static class SelfTest
         catch (Exception ex)
         {
             Add("工具仓库：SHA-256 计算正确（公开测试向量）", false, ex.Message);
+        }
+    }
+
+    // ---------------------------------------------------------------- 查找可用模型
+
+    /// <summary>
+    /// 「查找模型」的用例。
+    ///
+    /// ⚠️ **不联网**（自检必须离线可跑）—— 只验两件最容易出错的事：
+    ///   ① URL 拼接（用户填的地址写法千奇百怪，拼错=永远查不到）；
+    ///   ② 返回解析（字段名/结构错了就是"查到 0 个"，用户会误以为服务坏了）。
+    /// 真实联网查询由实机测试覆盖。
+    /// </summary>
+    private static void RunModelDiscoveryTests()
+    {
+        // ---- 1. OpenAI 兼容地址的规范化 ----
+        //
+        // 用户可能把整条 /chat/completions 填进来、可能不带 /v1、末尾可能带斜杠。
+        // 每一种都得拼出正确的 /models。
+        try
+        {
+            var cases = new (string Input, string Want)[]
+            {
+                ("https://api.deepseek.com", "https://api.deepseek.com/v1/models"),
+                ("https://api.deepseek.com/", "https://api.deepseek.com/v1/models"),
+                ("https://api.deepseek.com/v1", "https://api.deepseek.com/v1/models"),
+                ("https://api.deepseek.com/v1/", "https://api.deepseek.com/v1/models"),
+                ("https://api.deepseek.com/v1/chat/completions", "https://api.deepseek.com/v1/models"),
+                ("https://api.deepseek.com/v1/models", "https://api.deepseek.com/v1/models"),
+            };
+
+            var bad = new List<string>();
+
+            foreach (var (input, want) in cases)
+            {
+                var got = ModelDiscovery.BuildModelsUrl(input);
+
+                if (got != want)
+                {
+                    bad.Add($"「{input}」→「{got}」（应为「{want}」）");
+                }
+            }
+
+            var ok = bad.Count == 0;
+
+            Add("查找模型：地址规范化（容忍 /v1、末尾斜杠、整条 completions 路径）", ok,
+                ok ? $"全部 {cases.Length} 种写法都拼对了" : "★ " + string.Join("；", bad));
+        }
+        catch (Exception ex)
+        {
+            Add("查找模型：地址规范化（容忍 /v1、末尾斜杠、整条 completions 路径）", false, ex.Message);
+        }
+
+        // ---- 2. Ollama 地址的规范化 ----
+        try
+        {
+            var cases = new (string Input, string Want)[]
+            {
+                ("http://127.0.0.1:11434", "http://127.0.0.1:11434/api/tags"),
+                ("http://127.0.0.1:11434/", "http://127.0.0.1:11434/api/tags"),
+                ("http://127.0.0.1:11434/api/generate", "http://127.0.0.1:11434/api/tags"),
+            };
+
+            var bad = new List<string>();
+
+            foreach (var (input, want) in cases)
+            {
+                var got = ModelDiscovery.BuildOllamaTagsUrl(input);
+
+                if (got != want)
+                {
+                    bad.Add($"「{input}」→「{got}」");
+                }
+            }
+
+            var ok = bad.Count == 0;
+
+            Add("查找模型：Ollama 地址规范化（剥掉 /api/xxx，接回 /api/tags）", ok,
+                ok ? $"全部 {cases.Length} 种写法都拼对了" : "★ " + string.Join("；", bad));
+        }
+        catch (Exception ex)
+        {
+            Add("查找模型：Ollama 地址规范化（剥掉 /api/xxx，接回 /api/tags）", false, ex.Message);
+        }
+
+        // ---- 3. OpenAI /models 的解析 ----
+        try
+        {
+            var json = "{ \"object\": \"list\", \"data\": [ "
+                     + "{ \"id\": \"deepseek-chat\", \"object\": \"model\", \"owned_by\": \"deepseek\" }, "
+                     + "{ \"id\": \"deepseek-reasoner\", \"object\": \"model\", \"owned_by\": \"deepseek\" } "
+                     + "] }";
+
+            var models = ModelDiscovery.ParseOpenAiModels(json);
+
+            var ok = models.Count == 2
+                     && models[0].Id == "deepseek-chat"
+                     && models[0].OwnedBy == "deepseek";
+
+            Add("查找模型：能解析 OpenAI 格式的 /models 返回", ok,
+                ok ? "解析出 2 个模型（含 owned_by）"
+                   : $"实得 {models.Count} 个：{string.Join("、", models.Select(m => m.Id))}");
+        }
+        catch (Exception ex)
+        {
+            Add("查找模型：能解析 OpenAI 格式的 /models 返回", false, ex.Message);
+        }
+
+        // ---- 4. 结构异常时必须返回空列表（而不是抛异常）----
+        //
+        // 抛异常会被当成"服务坏了"；返回空才能给出"这个服务可能没实现 /models"
+        // 这种**正确**的提示。
+        try
+        {
+            var wrongShape = ModelDiscovery.ParseOpenAiModels("{ \"foo\": 1 }");
+            var notJson = ModelDiscovery.ParseOpenAiModels("这不是 JSON");
+
+            var ok = wrongShape.Count == 0 && notJson.Count == 0;
+
+            Add("查找模型：返回结构异常时安全返回空列表（不抛异常）", ok,
+                ok ? "结构不对 / 不是 JSON 都安全返回空"
+                   : $"wrongShape={wrongShape.Count} 非JSON={notJson.Count}");
+        }
+        catch (Exception ex)
+        {
+            Add("查找模型：返回结构异常时安全返回空列表（不抛异常）", false, ex.Message);
+        }
+
+        // ---- 5. Ollama /api/tags 的解析（含体积换算）----
+        try
+        {
+            var json = "{ \"models\": [ "
+                     + "{ \"name\": \"qwen2.5:7b\", \"size\": 4727858325 }, "
+                     + "{ \"name\": \"llava\", \"size\": 4087017642 } "
+                     + "] }";
+
+            var models = ModelDiscovery.ParseOllamaModels(json);
+
+            var ok = models.Count == 2
+                     && models[0].Id == "qwen2.5:7b"
+                     && !string.IsNullOrWhiteSpace(models[0].OwnedBy);
+
+            Add("查找模型：能解析 Ollama 的 /api/tags（体积显示成 GB）", ok,
+                ok ? string.Join("、", models.Select(m => $"{m.Id}（{m.OwnedBy}）"))
+                   : $"实得 {models.Count} 个");
+        }
+        catch (Exception ex)
+        {
+            Add("查找模型：能解析 Ollama 的 /api/tags（体积显示成 GB）", false, ex.Message);
+        }
+
+        // ---- 6. 排序：把明显不能对话的排到后面 ----
+        //
+        // ⚠️ 用例用的是**真实数据里的名字**，不是我自己编的。
+        //   第一版排序我只列了 embedding/whisper 几个词，离线用例全绿；
+        //   但拿真实的硅基流动端点一测就露馅了 ——
+        //   `BAAI/bge-large-zh-v1.5` 是向量模型，名字里却没有 "embedding"，
+        //   于是被排到了**最前面**。
+        //
+        //   ⇒ 教训：**离线用例只能证明"我想到的情况我处理了"，
+        //      证明不了"真实情况比我想的多"。**
+        //      这就是为什么一定要拿真服务跑一遍（artifacts\probe-models\）。
+        try
+        {
+            var mixed = new[]
+            {
+                new ModelInfo("BAAI/bge-large-zh-v1.5", null),   // 向量：名字里没有 embedding
+                new ModelInfo("gpt-4o-mini", null),
+                new ModelInfo("whisper-1", null),                 // 语音
+                new ModelInfo("deepseek-ai/DeepSeek-V3", null),
+                new ModelInfo("dall-e-3", null),                  // 图像
+                new ModelInfo("Qwen/Qwen3-Reranker-8B", null),    // 重排
+            };
+
+            var sorted = ModelDiscovery.SortForChat(mixed);
+            var firstTwo = sorted.Take(2).Select(m => m.Id).ToList();
+            var rest = sorted.Skip(2).Select(m => m.Id).ToList();
+
+            var chatFirst = firstTwo.Contains("deepseek-ai/DeepSeek-V3")
+                            && firstTwo.Contains("gpt-4o-mini");
+
+            var nonChatLast = rest.Contains("BAAI/bge-large-zh-v1.5")
+                              && rest.Contains("whisper-1")
+                              && rest.Contains("dall-e-3")
+                              && rest.Contains("Qwen/Qwen3-Reranker-8B");
+
+            var ok = chatFirst && nonChatLast;
+
+            Add("查找模型：向量/语音/图像模型排到后面（真实名字，含 bge 这种不含 embedding 的）", ok,
+                ok
+                    ? $"顺序：{string.Join(" → ", sorted.Select(m => m.Id))}"
+                    : $"chatFirst={chatFirst} nonChatLast={nonChatLast}");
+
+            // ★ 同时把"启发式一定有盲区"钉成断言，
+            //   防止以后有人（包括未来的我）把这套排序当可靠判定去依赖。
+            //   这也是界面上只能说"已把疑似不能对话的排后面"、
+            //   不能说"前面的都能用"的原因。
+            var unseen = ModelDiscovery.LooksNonChat("some-vendor/CoolModel-7B");
+
+            Add("查找模型：排序只是启发式（确有盲区，故界面措辞必须保守）", !unseen,
+                unseen
+                    ? "★ 连这个也判成非对话 ⇒ 规则太宽"
+                    : "猜不出「some-vendor/CoolModel-7B」的类型 ⇒ 排序有盲区，界面不许说"
+                      + "「前面的都能用」");
+        }
+        catch (Exception ex)
+        {
+            Add("查找模型：向量/语音/图像模型排到后面（真实名字，含 bge 这种不含 embedding 的）", false, ex.Message);
+        }
+
+        // ---- 7. ★ 模型名写错时给出正确建议（本功能价值最高的一环）----
+        //
+        // 来自真实联网验证：用户设置里填的是 `Qwen3-8B`，
+        // 而硅基流动真实存在的名字是 `Qwen/Qwen3-8B`（少了组织前缀）。
+        // 发真实请求只会得到一句 `400 错误的请求` —— 完全看不出是名字写错了。
+        //
+        // 光说"你填的不在列表里"只解决一半；
+        // 指出"是不是想填 Qwen/Qwen3-8B"才是把问题真正解决掉。
+        try
+        {
+            var models = new List<ModelInfo>
+            {
+                new("Qwen/Qwen3-8B", "Qwen"),
+                new("Qwen/Qwen3-14B", "Qwen"),
+                new("deepseek-ai/DeepSeek-V3", "deepseek"),
+                new("Qwen/Qwen3-Embedding-8B", "Qwen"),
+            };
+
+            // ① 漏填组织前缀（实测正是这一种）
+            var prefix = ModelDiscovery.SuggestFor(models, "Qwen3-8B");
+
+            var prefixOk = prefix.Count > 0 && prefix[0] == "Qwen/Qwen3-8B";
+
+            // ② 大小写 / 分隔符差异
+            var loose = ModelDiscovery.SuggestFor(models, "qwen3.8b");
+
+            var looseOk = loose.Contains("Qwen/Qwen3-8B");
+
+            // ③ 完全不相干的名字 ⇒ 不许瞎猜一个出来（乱猜比不猜更糟）
+            var none = ModelDiscovery.SuggestFor(models, "totally-not-here");
+
+            var noGuess = none.All(s => !s.Contains("DeepSeek", StringComparison.OrdinalIgnoreCase));
+
+            var ok = prefixOk && looseOk && noGuess;
+
+            Add("查找模型：名字写错时能猜出正确写法（漏前缀 / 分隔符差异 / 不乱猜）", ok,
+                ok
+                    ? $"「Qwen3-8B」→ {string.Join("、", prefix)}；「qwen3.8b」→ {string.Join("、", loose)}"
+                    : $"prefixOk={prefixOk}({string.Join("/", prefix)}) "
+                      + $"looseOk={looseOk}({string.Join("/", loose)}) noGuess={noGuess}({string.Join("/", none)})");
+        }
+        catch (Exception ex)
+        {
+            Add("查找模型：名字写错时能猜出正确写法（漏前缀 / 分隔符差异 / 不乱猜）", false, ex.Message);
+        }
+
+        // ---- 8. ★ 探活结果的三档颜色（绿/黄/红），且必须是一处判定 ----
+        //
+        // 为什么这条值得单独测：模型名写错时，既不该报绿（用户会以为一切正常），
+        // 也**不该报红** —— 面板把红当硬拦截，会把一个其实能用的 AI 功能整个禁掉。
+        // 这个"黄色中间档"是刻意的，一旦有人手滑改回 false，AI 就直接不能用了。
+        try
+        {
+            var green = AiCheckUi.ColorFor(true, "连接正常，远端提供 95 个模型。");
+            var amber = AiCheckUi.ColorFor(true, "⚠ 连得上，但模型名「Qwen3-8B」不在列表里…");
+            var red = AiCheckUi.ColorFor(false, "探活超时：网络不通。");
+
+            var greenOk = green.R == 0x12 && green.G == 0xA1 && green.B == 0x50;
+            var amberOk = amber.R == 0xD9 && amber.G == 0x7A && amber.B == 0x06;
+            var redOk = red.R == 0xE0 && red.G == 0x3B && red.B == 0x3B;
+
+            // ★ 关键断言：**警告级仍然是"通"**，只是显示成黄色。
+            //   如果哪天有人把它改成返回 false，下面这条会立刻变红。
+            var threeDistinct = green != amber && amber != red && green != red;
+
+            var ok = greenOk && amberOk && redOk && threeDistinct;
+
+            Add("查找模型：模型名可疑显示成黄色（不能是红色——红会硬拦死 AI）", ok,
+                ok
+                    ? "绿=一切正常 / 黄=连上但可疑 / 红=真不通，三档各不同色"
+                    : $"greenOk={greenOk} amberOk={amberOk} redOk={redOk} distinct={threeDistinct}");
+
+            Add("查找模型：IsWarning 只认前缀，不误伤普通消息",
+                AiCheckUi.IsWarning("⚠ 有问题")
+                && !AiCheckUi.IsWarning("连接正常")
+                && !AiCheckUi.IsWarning(null)
+                && !AiCheckUi.IsWarning(""),
+                "只有以 ⚠ 开头的才算警告级");
+        }
+        catch (Exception ex)
+        {
+            Add("查找模型：模型名可疑显示成黄色（不能是红色——红会硬拦死 AI）", false, ex.Message);
+        }
+
+        // ---- 9. 三档颜色只在一处判（防止又散落 4 份实现）----
+        //
+        // 本轮已经栽过一次"同一功能各写一份"（选目录：一处坏三处好）。
+        // 这条用"源码里不许再出现内联的绿/红三元判断"来守这个规矩。
+        try
+        {
+            var root = FindSourceRoot();
+
+            if (string.IsNullOrEmpty(root))
+            {
+                Cases.Add(new Case
+                {
+                    Name = "AI 探活：颜色判定收敛到一处（不散落内联判断）",
+                    Passed = true,
+                    Informational = true,
+                    Detail = "读不到源码（安装版没有源码树），跳过。",
+                });
+            }
+            else
+            {
+                var files = new[]
+                {
+                    Path.Combine(root, "Shell", "SettingsWindow.xaml.cs"),
+                    Path.Combine(root, "Tools", "Ai", "AiPanel.xaml.cs"),
+                };
+
+                // 匹配 "ok ? Color.FromRgb(绿) : Color.FromRgb(红)" 这种内联二档判断
+                var pattern = @"ok\s*\r?\n?\s*\?\s*Color\.FromRgb\(0x12,\s*0xA1,\s*0x50\)";
+
+                var offenders = new List<string>();
+
+                foreach (var f in files)
+                {
+                    if (!File.Exists(f))
+                    {
+                        continue;
+                    }
+
+                    var text = File.ReadAllText(f, System.Text.Encoding.UTF8);
+
+                    if (System.Text.RegularExpressions.Regex.IsMatch(text, pattern))
+                    {
+                        offenders.Add(Path.GetFileName(f));
+                    }
+                }
+
+                var ok = offenders.Count == 0;
+
+                Add("AI 探活：颜色判定收敛到一处（不散落内联判断）", ok,
+                    ok
+                        ? "两个调用点都走 AiCheckUi.ColorFor，没有各写一套绿/红"
+                        : $"★ 这些文件里还有内联的 ok?绿:红 判断：{string.Join("、", offenders)}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Add("AI 探活：颜色判定收敛到一处（不散落内联判断）", false, ex.Message);
         }
     }
 

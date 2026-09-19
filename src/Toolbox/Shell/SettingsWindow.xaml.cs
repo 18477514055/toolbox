@@ -76,6 +76,11 @@ internal sealed partial class SettingsWindow : Window
             SofficeBox, "选择 soffice.exe", "可执行文件|*.exe|所有文件|*.*");
         ScreenshotDirBrowseBtn.Click += (_, _) => BrowseFolder(ScreenshotDirBox);
         TestOllamaBtn.Click += async (_, _) => await TestOllamaAsync();
+
+        // 「查找模型」——用户要求：填好地址和 Key 就能列出可选模型，不用手敲模型名
+        FetchRemoteModelsBtn.Click += async (_, _) => await FetchModelsAsync(isRemote: true);
+        FetchOllamaModelsBtn.Click += async (_, _) => await FetchModelsAsync(isRemote: false);
+
         OpacitySlider.ValueChanged += (_, _) =>
             OpacityLabel.Text = $"{OpacitySlider.Value:0.00}";
 
@@ -395,10 +400,10 @@ internal sealed partial class SettingsWindow : Window
         ShowToolWrittenBox.IsChecked = s.ShowToolWritten;
 
         OllamaUrlBox.Text = s.OllamaUrl;
-        OllamaModelBox.Text = s.OllamaModel;
+        OllamaModelCombo.Text = s.OllamaModel;
         RemoteUrlBox.Text = s.RemoteApiUrl;
         RemoteKeyBox.Text = s.RemoteApiKey;
-        RemoteModelBox.Text = s.RemoteModel;
+        RemoteModelCombo.Text = s.RemoteModel;
         ChunkBox.Text = s.AiChunkChars.ToString();
         MainContentBox.IsChecked = s.AiMainContentOnly;
 
@@ -479,15 +484,15 @@ internal sealed partial class SettingsWindow : Window
             return new RemoteAiClient(
                 RemoteUrlBox.Text.Trim(),
                 RemoteKeyBox.Text.Trim(),
-                RemoteModelBox.Text.Trim());
+                RemoteModelCombo.Text.Trim());
         }
 
         var url = string.IsNullOrWhiteSpace(OllamaUrlBox.Text)
             ? "http://127.0.0.1:11434"
             : OllamaUrlBox.Text.Trim();
-        var model = string.IsNullOrWhiteSpace(OllamaModelBox.Text)
+        var model = string.IsNullOrWhiteSpace(OllamaModelCombo.Text)
             ? "qwen2.5:7b"
-            : OllamaModelBox.Text.Trim();
+            : OllamaModelCombo.Text.Trim();
 
         return new OllamaClient(url, model);
     }
@@ -647,10 +652,10 @@ internal sealed partial class SettingsWindow : Window
 
         s.AiBackend = AiBackendCombo.SelectedIndex == 1 ? "remote" : "ollama";
         s.OllamaUrl = string.IsNullOrWhiteSpace(OllamaUrlBox.Text) ? "http://127.0.0.1:11434" : OllamaUrlBox.Text.Trim();
-        s.OllamaModel = string.IsNullOrWhiteSpace(OllamaModelBox.Text) ? "qwen2.5:7b" : OllamaModelBox.Text.Trim();
+        s.OllamaModel = string.IsNullOrWhiteSpace(OllamaModelCombo.Text) ? "qwen2.5:7b" : OllamaModelCombo.Text.Trim();
         s.RemoteApiUrl = RemoteUrlBox.Text.Trim();
         s.RemoteApiKey = RemoteKeyBox.Text.Trim();
-        s.RemoteModel = RemoteModelBox.Text.Trim();
+        s.RemoteModel = RemoteModelCombo.Text.Trim();
         if (int.TryParse(ChunkBox.Text.Trim(), out var chunk) && chunk >= 500)
         {
             s.AiChunkChars = Math.Min(chunk, 20000);
@@ -830,9 +835,10 @@ internal sealed partial class SettingsWindow : Window
             var (ok, message, _) = await client.CheckAsync(cts.Token);
 
             OllamaStatus.Text = $"[{client.DisplayName}] {message}";
-            OllamaStatus.Foreground = new SolidColorBrush(ok
-                ? Color.FromRgb(0x12, 0xA1, 0x50)
-                : Color.FromRgb(0xE0, 0x3B, 0x3B));
+
+            // 颜色交给 AiCheckUi 统一判：绿色=真没事，黄色=连上了但可疑，红色=不通。
+            // （不在这儿各写一套 if，理由见 AiCheckUi 的说明）
+            OllamaStatus.Foreground = new SolidColorBrush(AiCheckUi.ColorFor(ok, message));
         }
         catch (Exception ex)
         {
@@ -842,6 +848,134 @@ internal sealed partial class SettingsWindow : Window
         finally
         {
             TestOllamaBtn.IsEnabled = true;
+        }
+    }
+
+    /// <summary>
+    /// 「查找模型」：向当前填好的后端要一份可用模型列表，填进旁边的下拉框。
+    ///
+    /// 为什么值得做：原来用户要去服务商网站翻文档找模型名，
+    /// 再一个字一个字敲进设置里 —— 敲错一个字符只会得到"模型不存在"，
+    /// 而错误信息完全指不到"名字打错了"。
+    ///
+    /// 两个细节：
+    ///   · **不覆盖用户已填的内容**（除非他明确点了下拉框）。
+    ///     查到列表后只填进 ItemsSource 与选中项，不动别的字段；
+    ///   · 失败时**照抄 ModelDiscovery 给的中文原因**（它把 401/403/404
+    ///     翻译成了能照做的话），而不是笼统一句"查询失败"。
+    /// </summary>
+    private async Task FetchModelsAsync(bool isRemote)
+    {
+        var btn = isRemote ? FetchRemoteModelsBtn : FetchOllamaModelsBtn;
+        var combo = isRemote ? RemoteModelCombo : OllamaModelCombo;
+
+        btn.IsEnabled = false;
+        OllamaStatus.Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x94, 0xA6));
+        OllamaStatus.Text = isRemote ? "正在向 API 查询可用模型…" : "正在查询本地 Ollama 的模型…";
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+
+            var result = isRemote
+                ? await ModelDiscovery.QueryRemoteAsync(RemoteUrlBox.Text, RemoteKeyBox.Text, cts.Token)
+                : await ModelDiscovery.QueryOllamaAsync(OllamaUrlBox.Text, cts.Token);
+
+            if (!result.Ok)
+            {
+                OllamaStatus.Text = result.Hint is null
+                    ? result.Error ?? "查询失败。"
+                    : $"{result.Error}\n{result.Hint}";
+
+                OllamaStatus.Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0x3B, 0x3B));
+                return;
+            }
+
+            // 记下用户原本填的模型名 —— 查到列表后不能把它弄丢
+            var keep = combo.Text;
+
+            // ★ 列表项放**纯模型名字符串**，而不是 ModelInfo 对象。
+            //
+            //   为什么不用 DisplayMemberPath 显示「id（归属）」：
+            //   可编辑 ComboBox 在被选中项变化时，Text 会变成**显示文本**。
+            //   那样保存的就是 "deepseek-chat　（deepseek）" 这种带括号的字符串
+            //   —— 存进设置的模型名就错了，而且是用户完全看不出来的错。
+            //   归属/大小这类附加信息不值得拿正确性去换，所以列表只放名字本身。
+            combo.ItemsSource = result.Models.Select(m => m.Id).ToList();
+
+            // 用户原来填的名字，在返回的列表里能不能精确找到（下面提示要用）
+            var matched = string.IsNullOrWhiteSpace(keep)
+                ? null
+                : result.Models.FirstOrDefault(m =>
+                    string.Equals(m.Id, keep.Trim(), StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrWhiteSpace(keep))
+            {
+                // 原来填的还在列表里就继续选它；不在就保留用户手敲的文本
+                combo.Text = matched?.Id ?? keep;
+            }
+            else
+            {
+                // 空着就默认选第一个（排序已把对话模型排在前面）
+                combo.SelectedIndex = 0;
+            }
+
+            combo.IsDropDownOpen = true;
+
+            var lines = new List<string>
+            {
+                $"查到 {result.Models.Count} 个模型，从下拉框里选一个。",
+
+                // ⚠️ 措辞刻意保守：排序是**启发式**，一定会漏。
+                //   第一版只列了 embedding/whisper 几个词，拿真实服务一测就露馅 ——
+                //   `BAAI/bge-large-zh-v1.5` 是向量模型但名字里没有 embedding，
+                //   当时被排到了最前面。所以这里不能说"前面的都能对话"，
+                //   只能说"已把疑似不能对话的排后面"。
+                //   **把启发式包装成判定，是在给用户假的安全感。**
+                "已把名字像向量/语音/图像生成的模型排到后面（按名字猜，不保证准确）——",
+                "拿不准就选一个试着测一次连接。",
+            };
+
+            // ★ 最有价值的一环：用户填的名字不在列表里时，直接给出可能正确的写法。
+            //
+            //   实测：用户设置里填的是 `Qwen3-8B`，而真实存在的名字是
+            //   `Qwen/Qwen3-8B`（少了组织前缀）。发真实请求只会得到
+            //   一句 `400 错误的请求`，完全看不出是名字写错了。
+            //   光说"不在列表里"只解决一半；指出"是不是想填这个"才是真解决。
+            if (!string.IsNullOrWhiteSpace(keep) && matched is null)
+            {
+                var suggestions = ModelDiscovery.SuggestFor(result.Models, keep);
+
+                OllamaStatus.Foreground = new SolidColorBrush(Color.FromRgb(0xD9, 0x7A, 0x06));
+
+                lines.Add("");
+                lines.Add($"⚠ 你填的「{keep}」**不在**这个服务返回的列表里 —— 现在这样多半会报错。");
+
+                if (suggestions.Count > 0)
+                {
+                    lines.Add($"   是不是想填：{string.Join("、", suggestions)}");
+                }
+                else
+                {
+                    lines.Add("   列表里没有相近的名字，从下拉框里挑一个吧。");
+                }
+            }
+            else
+            {
+                OllamaStatus.Foreground = new SolidColorBrush(Color.FromRgb(0x12, 0xA1, 0x50));
+            }
+
+            OllamaStatus.Text = string.Join("\n", lines);
+        }
+        catch (Exception ex)
+        {
+            Log.Exception("查找模型失败", ex);
+            OllamaStatus.Text = $"查询出错：{ex.Message}";
+            OllamaStatus.Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0x3B, 0x3B));
+        }
+        finally
+        {
+            btn.IsEnabled = true;
         }
     }
 
@@ -864,9 +998,7 @@ internal sealed partial class SettingsWindow : Window
                 var (ok, message, _) = await client.CheckAsync(cts.Token);
 
                 OllamaStatus.Text = $"[{client.DisplayName}] {message}";
-                OllamaStatus.Foreground = new SolidColorBrush(ok
-                    ? Color.FromRgb(0x12, 0xA1, 0x50)
-                    : Color.FromRgb(0xE0, 0x3B, 0x3B));
+                OllamaStatus.Foreground = new SolidColorBrush(AiCheckUi.ColorFor(ok, message));
             }
             catch (Exception ex)
             {

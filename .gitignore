@@ -43,3 +43,5 @@ artifacts/**/plugins/
 
 # 探针的发布产物（单文件 exe 很大，不入库）
 artifacts/**/out/
+
+.msg.txt

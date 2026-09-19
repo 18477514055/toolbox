@@ -84,8 +84,8 @@
                       "BuiltIn":  false,
                       "Version":  "1.0.0",
                       "AssetName":  "Toolbox-Plugin-rename-v1.0.0.zip",
-                      "Sha256":  "F484917A49A27E4B97C43750DEC94A61286A710F140EBFE27F3FB3E8671B56CD",
-                      "Size":  15216
+                      "Sha256":  "001ED0E3636AA4CDF8719792BD34A84106151C5C520BBF8742D1D7E59F65BD52",
+                      "Size":  15133
                   },
                   {
                       "Id":  "hash",
@@ -145,8 +145,8 @@
                       "BuiltIn":  false,
                       "Version":  "1.0.0",
                       "AssetName":  "Toolbox-Plugin-archive-v1.0.0.zip",
-                      "Sha256":  "AFF1A142D4817CC716A30F9E6B1ABE5AE068F922D2123D5FA699AEF8F0550F54",
-                      "Size":  18726,
+                      "Sha256":  "9F5F1F58E9A2C23C13B6748A7AD3839A3C2FF72A6B6FECB01A95EB561B4EE23F",
+                      "Size":  18744,
                       "Requires":  "rar 格式需要装 WinRAR"
                   }
               ]

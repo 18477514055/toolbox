@@ -93,6 +93,8 @@ internal static class SelfTest
             RunToolSwitchTests();
             RunToolStoreTests();
             RunPluginTests();
+            RunAutoStartTests();
+            RunSupportTests();
             RunRegistrationTests();
             RunConvertTests();
             RunEnvironmentTests();
@@ -2015,6 +2017,152 @@ internal static class SelfTest
         catch (Exception ex)
         {
             Add("工具仓库：SHA-256 计算正确（公开测试向量）", false, ex.Message);
+        }
+    }
+
+    // ---------------------------------------------------------------- 开机自启（双机制）
+
+    /// <summary>
+    /// 开机自启的用例。
+    ///
+    /// ⚠️ 这些**不会真的改用户的自启设置**（那有副作用）——
+    ///    只验"两套机制的判据可用、路径算得对"。
+    ///    真正的读写由实机测试覆盖（已验：off→两套都清、on→两套都写、
+    ///    通过快捷方式启动能收到 --startup）。
+    /// </summary>
+    private static void RunAutoStartTests()
+    {
+        // ---- 1. 启动文件夹路径必须存在且可写 ----
+        //
+        // 防的是"路径算错了"——算错的话创建快捷方式会静默失败，
+        // 而自启失效是**要重启机器才能发现**的问题，代价极高。
+        try
+        {
+            var path = AutoStart.StartupFolderPath;
+            var dir = Path.GetDirectoryName(path) ?? "";
+
+            var hasDir = !string.IsNullOrEmpty(dir);
+            var dirExists = Directory.Exists(dir);
+            var nameOk = Path.GetFileName(path).EndsWith(".lnk", StringComparison.OrdinalIgnoreCase);
+
+            var ok = hasDir && dirExists && nameOk;
+
+            Add("开机自启：启动文件夹路径正确且存在", ok,
+                ok ? $"启动文件夹：{dir}" : $"hasDir={hasDir} dirExists={dirExists} nameOk={nameOk} path={path}");
+        }
+        catch (Exception ex)
+        {
+            Add("开机自启：启动文件夹路径正确且存在", false, ex.Message);
+        }
+
+        // ---- 2. 状态查询必须能正常工作（不抛异常）----
+        //
+        // 设置界面靠它显示两套机制的状态。它若抛异常，
+        // 用户看到的就是一片空白 —— 而那恰恰是排查自启问题的唯一线索。
+        try
+        {
+            var (runKey, shortcut, runKeyHere) = AutoStart.GetStatus();
+
+            Add("开机自启：状态查询可用（注册表 / 快捷方式 / 路径比对）", true,
+                $"注册表={runKey}，启动文件夹={shortcut}，注册表指向本程序={runKeyHere}");
+        }
+        catch (Exception ex)
+        {
+            Add("开机自启：状态查询可用（注册表 / 快捷方式 / 路径比对）", false, ex.Message);
+        }
+
+        // ---- 3. 两套机制的判据必须互相独立 ----
+        //
+        // 这是本次修复的核心：**不能只靠注册表**。
+        // 这条保证代码里确实存在"启动文件夹"这条独立路径，不是我口头说说。
+        try
+        {
+            var hasShortcutApi = typeof(AutoStart).GetMethod("HasStartupShortcut") is not null;
+            var hasSetShortcutApi = typeof(AutoStart).GetMethod("SetStartupShortcut") is not null;
+            var hasFolderProp = typeof(AutoStart).GetProperty("StartupFolderPath") is not null;
+
+            var ok = hasShortcutApi && hasSetShortcutApi && hasFolderProp;
+
+            Add("开机自启：同时具备两套机制（注册表 + 启动文件夹）", ok,
+                ok
+                    ? "HasStartupShortcut / SetStartupShortcut / StartupFolderPath 都在"
+                    : $"hasShortcutApi={hasShortcutApi} hasSetShortcutApi={hasSetShortcutApi} hasFolderProp={hasFolderProp}");
+        }
+        catch (Exception ex)
+        {
+            Add("开机自启：同时具备两套机制（注册表 + 启动文件夹）", false, ex.Message);
+        }
+    }
+
+    // ---------------------------------------------------------------- 赞赏支持
+
+    /// <summary>
+    /// 赞赏入口的用例。
+    ///
+    /// 只验**链接合法**与**不内嵌网页** ——
+    /// 具体打开行为要人去点，自检里不该真的弹浏览器。
+    /// </summary>
+    private static void RunSupportTests()
+    {
+        try
+        {
+            var field = typeof(SettingsWindow).GetField(
+                "SupportUrl",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+            var url = field?.GetValue(null) as string ?? "";
+
+            var httpsOk = url.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+            var hostOk = url.Contains("afdian.com", StringComparison.OrdinalIgnoreCase);
+            var notEmpty = !string.IsNullOrWhiteSpace(url);
+
+            var ok = httpsOk && hostOk && notEmpty;
+
+            Add("赞赏支持：链接合法（https + 爱发电域名）", ok,
+                ok ? url : $"httpsOk={httpsOk} hostOk={hostOk} url=「{url}」");
+        }
+        catch (Exception ex)
+        {
+            Add("赞赏支持：链接合法（https + 爱发电域名）", false, ex.Message);
+        }
+
+        // ---- 隐私：工具箱**不该**内嵌任何网页控件 ----
+        //
+        // 有意加这条：赞助页涉及登录/支付，
+        // 一定要在用户自己的浏览器里完成，不能塞进程序内的 WebView。
+        try
+        {
+            var root = FindSourceRoot();
+            var xaml = string.IsNullOrEmpty(root)
+                ? ""
+                : Path.Combine(root, "Shell", "SettingsWindow.xaml");
+
+            if (string.IsNullOrEmpty(root) || !File.Exists(xaml))
+            {
+                Cases.Add(new Case
+                {
+                    Name = "赞赏支持：不内嵌网页控件（用系统浏览器打开）",
+                    Passed = true,
+                    Informational = true,
+                    Detail = "读不到 SettingsWindow.xaml（安装版没有源码树），跳过。",
+                });
+            }
+            else
+            {
+                var text = File.ReadAllText(xaml, System.Text.Encoding.UTF8);
+
+                var hasWebView = text.Contains("WebBrowser", StringComparison.OrdinalIgnoreCase)
+                                 || text.Contains("WebView2", StringComparison.OrdinalIgnoreCase);
+
+                Add("赞赏支持：不内嵌网页控件（用系统浏览器打开）", !hasWebView,
+                    hasWebView
+                        ? "★ 设置窗口里出现了网页控件 —— 赞助页涉及登录/支付，必须在系统浏览器里打开"
+                        : "设置窗口里没有任何网页控件，确认走系统浏览器");
+            }
+        }
+        catch (Exception ex)
+        {
+            Add("赞赏支持：不内嵌网页控件（用系统浏览器打开）", false, ex.Message);
         }
     }
 

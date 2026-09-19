@@ -68,6 +68,10 @@ internal sealed partial class SettingsWindow : Window
         OpenDataBtn.Click += (_, _) => OpenPath(AppPaths.Root);
         OpenLogBtn.Click += (_, _) => OpenPath(AppPaths.LogDir);
         ManageToolsBtn.Click += (_, _) => OpenToolStore();
+
+        // 赞赏支持
+        SupportBtn.Click += (_, _) => OpenSupportPage();
+        CopySupportLinkBtn.Click += (_, _) => CopySupportLink();
         SofficeBrowseBtn.Click += (_, _) => BrowseFile(
             SofficeBox, "选择 soffice.exe", "可执行文件|*.exe|所有文件|*.*");
         ScreenshotDirBrowseBtn.Click += (_, _) => BrowseFolder(ScreenshotDirBox);
@@ -117,6 +121,111 @@ internal sealed partial class SettingsWindow : Window
         {
             Log.Exception("打开工具管理窗口失败", ex);
         }
+    }
+
+    // ---------------------------------------------------------------- 赞赏支持
+
+    /// <summary>
+    /// 作者的赞助页地址。
+    ///
+    /// 放在这里而不是硬编码进 XAML，是为了**一眼能找到、改起来只改一处**。
+    /// 以后换平台（爱发电 / 其他）只改这个常量。
+    /// </summary>
+    private const string SupportUrl = "https://afdian.com/a/070714game";
+
+    /// <summary>
+    /// 用系统默认浏览器打开赞助页。
+    ///
+    /// ⚠️ 为什么用 `UseShellExecute = true` 而不是内嵌 WebView：
+    ///   ① 内嵌浏览器要多带几十 MB 运行时，与"零第三方依赖"冲突；
+    ///   ② 赞助页面涉及登录/支付，**在别人的内嵌控件里输账号密码是坏习惯** ——
+    ///      用户应该在自己信任的浏览器里完成；
+    ///   ③ 用系统浏览器打开，用户能看到地址栏、能用密码管理器，也更安全。
+    /// </summary>
+    private void OpenSupportPage()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(SupportUrl)
+            {
+                UseShellExecute = true,
+            });
+
+            SupportHint.Text = "已在浏览器中打开。谢谢你的支持 ❤";
+            SupportHint.Foreground = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(0x12, 0xA1, 0x50));
+
+            Log.Line("用户打开了赞助页。");
+        }
+        catch (Exception ex)
+        {
+            // 打不开浏览器不是错误，只是没打开 —— 给出可复制的链接兜底
+            Log.Exception("打开赞助页失败", ex);
+
+            SupportHint.Text = $"没能自动打开浏览器。可以手动复制这个地址：{SupportUrl}";
+            SupportHint.Foreground = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(0xD9, 0x7A, 0x06));
+        }
+    }
+
+    /// <summary>把赞助链接复制到剪贴板（浏览器打不开时的兜底）。</summary>
+    private void CopySupportLink()
+    {
+        try
+        {
+            System.Windows.Clipboard.SetText(SupportUrl);
+
+            SupportHint.Text = "链接已复制到剪贴板。";
+            SupportHint.Foreground = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(0x12, 0xA1, 0x50));
+        }
+        catch (Exception ex)
+        {
+            Log.Exception("复制赞助链接失败", ex);
+            SupportHint.Text = $"复制失败，请手动记录：{SupportUrl}";
+            SupportHint.Foreground = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(0xE0, 0x3B, 0x3B));
+        }
+    }
+
+    // ---------------------------------------------------------------- 开机自启
+
+    /// <summary>
+    /// 刷新自启状态说明 —— **把两套机制的实际情况都显示出来**。
+    ///
+    /// 为什么要显示得这么细（实测教训）：
+    ///   用户反馈"开机还是得手动点"。查下来 Run 键写得好好的、路径也对、
+    ///   手动跑那条命令完全正常，但开机就是不启动 ——
+    ///   而界面上只写"已开启"，**完全看不出问题**。
+    ///
+    ///   所以这里并列显示两套机制各自的状态，哪一套没生效一眼可见。
+    ///   自启这类"开机才发生"的问题本来就极难复现（要重启机器），
+    ///   界面必须把能查的信息都摆出来。
+    /// </summary>
+    private void RefreshAutoStartHint()
+    {
+        var (runKey, shortcut, runKeyHere) = AutoStart.GetStatus();
+
+        var lines = new List<string>
+        {
+            $"当前 exe：{AutoStart.ExecutablePath}",
+            "",
+            "为了确保开机一定能起来，程序会**同时**用两种方式：",
+            $"　① 注册表 Run 键：{(runKey ? (runKeyHere ? "✅ 已写入，且指向当前 exe" : "⚠ 已写入，但指向别的路径（多半是程序被移动过）") : "⬜ 未写入")}",
+            $"　② 启动文件夹快捷方式：{(shortcut ? "✅ 已创建" : "⬜ 未创建")}",
+            "",
+            "两种方式是并行的：只要有一套生效，开机就会自动启动；",
+            "两套都生效时会由单实例机制保证只开一个，不会重复。",
+        };
+
+        if (runKey && !shortcut)
+        {
+            lines.Add("");
+            lines.Add("💡 目前只有注册表方式。如果开机没自动起来，");
+            lines.Add("　 点「保存」一次会把启动文件夹那份也补上（通常这样就好了）。");
+        }
+
+        AutoStartHint.Text = string.Join("\n", lines);
     }
 
     // ---------------------------------------------------------------- 功能开关
@@ -273,8 +382,8 @@ internal sealed partial class SettingsWindow : Window
     {
         var s = _ctx.Settings;
 
-        AutoStartBox.IsChecked = AutoStart.IsEnabled();
-        AutoStartHint.Text = $"当前 exe：{AutoStart.ExecutablePath}";
+        AutoStartBox.IsChecked = AutoStart.IsEnabled() || AutoStart.HasStartupShortcut();
+        RefreshAutoStartHint();
 
         ShowFloatingBox.IsChecked = s.ShowFloatingWindow;
         HideFloatingBox.IsChecked = s.HideFloatingWhenToolOpen;

@@ -236,6 +236,29 @@
                     <TextBlock x:Name="PrivacyText" TextWrapping="Wrap" Foreground="#FF4E5969" />
                 </Border>
 
+                <!-- ===== 赞赏支持 =====
+                     刻意做得**克制**：不弹窗、不倒数、不催、不在启动时打扰。
+                     想支持的人自己会找到这里；不想的人永远看不到它。 -->
+                <TextBlock Text="赞赏支持" Style="{StaticResource Section}" />
+                <Border Style="{StaticResource Row}">
+                    <StackPanel>
+                        <TextBlock TextWrapping="Wrap" Foreground="#FF4E5969"
+                                   Text="这个工具箱是免费、开源、无广告的，也没有任何联网上报。如果你想请作者喝一杯，可以走这里 —— 完全自愿，不影响任何功能。" />
+
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button x:Name="SupportBtn" Content="❤ 去爱发电支持作者"
+                                    Style="{StaticResource Btn}" Background="#FF946CE6" Padding="14,6" />
+                            <Button x:Name="CopySupportLinkBtn" Content="复制链接"
+                                    Style="{StaticResource Btn}" Background="#FF9AA4B2" Margin="8,0,0,0" />
+                        </StackPanel>
+
+                        <TextBlock x:Name="SupportHint" Style="{StaticResource Hint}" Margin="0,8,0,0" />
+
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0" TextWrapping="Wrap"
+                                   Text="按钮会用你系统默认的浏览器打开爱发电页面 —— 工具箱本身不内嵌任何网页，也不会上报你点没点。" />
+                    </StackPanel>
+                </Border>
+
             </StackPanel>
         </ScrollViewer>
 

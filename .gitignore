@@ -34,3 +34,5 @@ artifacts/**/plugins/
 # 临时提交/发布说明
 .commit-msg.txt
 .release-notes.md
+
+.msg.txt

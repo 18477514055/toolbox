@@ -247,17 +247,197 @@ internal static class AutoStart
         }
     }
 
-    public static bool Set(bool enabled, out string? error)
+    // ══════════════════════════════════════════════════════════════════
+    //  启动文件夹（与注册表 Run 键并行的**第二套机制**）
+    // ══════════════════════════════════════════════════════════════════
+    //
+    // 为什么要加这一套（实测踩到的真问题）：
+    //   用户反馈"开机还得手动点"。查下来：Run 键写得好好的、路径也对、
+    //   手动按那条命令跑完全正常 —— 但开机就是不启动。
+    //   硬线索是 `StartupApproved\Run` 里**从来没有过**本程序的条目：
+    //   Explorer 只要成功执行过一条 Run 项就会给它建记录，
+    //   没有记录 ⇒ 这条 Run 项从未被 Explorer 执行过。
+    //
+    //   Run 键失效的常见原因有一堆（安全软件拦截、Explorer 启动顺序、
+    //   组策略、条目的批准状态坏掉……），而且**都不可见**。
+    //   与其去赌某一种，不如**同时放一份到启动文件夹**：
+    //     · 启动文件夹是 Explorer 直接枚举目录里的 .lnk 执行，
+    //       不走 Run 键那套批准/登记逻辑；
+    //     · 两条路只要有一条通，开机就能起来；
+    //     · 两条都通时，程序有**单实例互斥**兜底，不会开两个。
+    //
+    // ⚠️ 代价要如实说：会在用户的启动目录里留一个 .lnk。
+    //    关闭自启时会**一并删掉**，不留垃圾。这一点写进了设置界面的说明。
+
+    /// <summary>启动文件夹里的快捷方式名。</summary>
+    private const string ShortcutName = "桌面工具箱.lnk";
+
+    /// <summary>启动文件夹完整路径。</summary>
+    public static string StartupFolderPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.Startup), ShortcutName);
+
+    /// <summary>启动文件夹里那份快捷方式当前是否存在。</summary>
+    public static bool HasStartupShortcut()
+    {
+        try
+        {
+            return File.Exists(StartupFolderPath);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 创建/删除启动文件夹里的快捷方式。
+    ///
+    /// ⚠️ 用 **WScript.Shell COM** 来建 .lnk，而不是手写二进制 .lnk 格式：
+    ///    .lnk 是结构化二进制（有 CLSID、LinkTargetIDList、LinkInfo…），
+    ///    手写要几百行且极易出错；WScript.Shell 是 Windows 自带的，
+    ///    三行就写完了。它**不是第三方依赖**（属于系统组件），
+    ///    所以不违反"零第三方依赖"这条项目约束。
+    /// </summary>
+    public static bool SetStartupShortcut(bool enabled, out string? error)
     {
         error = null;
 
         try
         {
+            var path = StartupFolderPath;
+
+            if (!enabled)
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                    Log.Line($"启动文件夹快捷方式已删除：{path}");
+                }
+
+                return true;
+            }
+
+            var exe = ExecutablePath;
+            if (string.IsNullOrEmpty(exe))
+            {
+                error = "拿不到程序自身的路径，无法创建启动快捷方式。";
+                return false;
+            }
+
+            // 用后期绑定调 COM，避免为一个小功能引入 COM 互操作引用
+            var shellType = Type.GetTypeFromProgID("WScript.Shell");
+            if (shellType is null)
+            {
+                error = "系统里找不到 WScript.Shell（COM 组件缺失），无法创建启动快捷方式。";
+                return false;
+            }
+
+            dynamic shell = Activator.CreateInstance(shellType)!;
+
+            try
+            {
+                dynamic shortcut = shell.CreateShortcut(path);
+                shortcut.TargetPath = exe;
+                shortcut.Arguments = StartupArgument;   // 与 Run 键保持一致
+                shortcut.WorkingDirectory = Path.GetDirectoryName(exe) ?? "";
+                shortcut.Description = "桌面工具箱（开机自启）";
+                shortcut.IconLocation = exe + ",0";
+                shortcut.Save();
+            }
+            finally
+            {
+                // 释放 COM 对象，别让单文件 exe 多留一个引用导致目录删不掉
+                System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell);
+            }
+
+            Log.Line($"启动文件夹快捷方式已创建：{path} → {exe} {StartupArgument}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Exception("设置启动文件夹快捷方式失败", ex);
+            error = $"创建启动快捷方式失败：{ex.Message}";
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 两套机制现在的实际状态（给设置界面显示，排障时一眼看清）。
+    /// </summary>
+    public static (bool RunKey, bool Shortcut, bool RunKeyPointsHere) GetStatus()
+    {
+        var runKey = IsEnabled();
+        var shortcut = HasStartupShortcut();
+
+        var runKeyHere = false;
+        try
+        {
+            var cmd = ReadRegisteredCommand(out _);
+            runKeyHere = cmd is not null && PointsAtCurrentExe(cmd);
+        }
+        catch
+        {
+            // 读不到就算 false
+        }
+
+        return (runKey, shortcut, runKeyHere);
+    }
+
+    /// <summary>
+    /// 开启/关闭自启 —— **两套机制一起设**。
+    ///
+    /// 只要**有一套成功**就算成功（并如实报告另一套的情况）；
+    /// 两套都失败才算失败。这样"某一套被系统策略挡住"时，
+    /// 开机自启仍然能用。
+    /// </summary>
+    public static bool Set(bool enabled, out string? error)
+    {
+        error = null;
+
+        var (runOk, runErr) = SetRunKey(enabled);
+        var lnkOk = SetStartupShortcut(enabled, out var lnkError);
+        var lnkErr = lnkOk ? null : lnkError;
+
+        if (runOk || lnkOk)
+        {
+            // 有一套成了就算成功，但**把另一套的问题说出来**（不静默）
+            var partial = new List<string>();
+
+            if (!runOk && runErr is not null)
+            {
+                partial.Add($"注册表方式：{runErr}");
+            }
+
+            if (!lnkOk && lnkErr is not null)
+            {
+                partial.Add($"启动文件夹方式：{lnkErr}");
+            }
+
+            if (partial.Count > 0)
+            {
+                error = "（已用另一种方式设置成功，但这一种失败：" + string.Join("；", partial) + "）";
+            }
+
+            Log.Line(enabled
+                ? $"开机自启已开启：注册表={runOk}，启动文件夹={lnkOk}"
+                : $"开机自启已关闭：注册表={runOk}，启动文件夹={lnkOk}");
+
+            return true;
+        }
+
+        error = $"两种方式都没成功。注册表：{runErr}；启动文件夹：{lnkError}";
+        return false;
+    }
+
+    /// <summary>只写注册表 Run 键（原逻辑，抽出来供双写复用）。</summary>
+    private static (bool Ok, string? Error) SetRunKey(bool enabled)
+    {
+        try
+        {
             var rc = RegOpenKeyExW(HKEY_CURRENT_USER, RunKeyPath, 0, KEY_QUERY_VALUE | KEY_SET_VALUE, out var key);
             if (rc != ERROR_SUCCESS)
             {
-                error = $"打不开注册表启动项（错误码 {rc}）。";
-                return false;
+                return (false, $"打不开注册表启动项（错误码 {rc}）");
             }
 
             try
@@ -267,35 +447,30 @@ internal static class AutoStart
                     var del = RegDeleteValueW(key, ValueName);
                     if (del != ERROR_SUCCESS && del != ERROR_FILE_NOT_FOUND)
                     {
-                        error = $"删除启动项失败（错误码 {del}）。";
-                        return false;
+                        return (false, $"删除启动项失败（错误码 {del}）");
                     }
 
-                    Log.Line("开机自启已关闭。");
-                    return true;
+                    return (true, null);
                 }
 
                 var exe = ExecutablePath;
                 if (string.IsNullOrEmpty(exe))
                 {
-                    error = "拿不到程序自身的路径，无法设置开机自启。";
-                    return false;
+                    return (false, "拿不到程序自身路径");
                 }
 
                 // 带引号：路径里可能有空格或中文。
-                // 再带上 --startup，让程序知道这次是开机拉起来的（见 StartupArgument 的说明）。
+                // 再带 --startup，让程序知道这次是开机拉起来的（见 StartupArgument 的说明）。
                 var command = $"\"{exe}\" {StartupArgument}";
                 var bytes = Encoding.Unicode.GetBytes(command + "\0");
 
                 var set = RegSetValueExW(key, ValueName, 0, REG_SZ, bytes, bytes.Length);
                 if (set != ERROR_SUCCESS)
                 {
-                    error = $"写入启动项失败（错误码 {set}）。";
-                    return false;
+                    return (false, $"写入启动项失败（错误码 {set}）");
                 }
 
-                Log.Line($"开机自启已开启：{command}");
-                return true;
+                return (true, null);
             }
             finally
             {
@@ -304,9 +479,8 @@ internal static class AutoStart
         }
         catch (Exception ex)
         {
-            Log.Exception("设置开机自启失败", ex);
-            error = $"设置开机自启失败：{ex.Message}";
-            return false;
+            Log.Exception("写注册表自启项失败", ex);
+            return (false, ex.Message);
         }
     }
 }

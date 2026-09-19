@@ -128,19 +128,21 @@ internal sealed partial class ArchiveWindow : Window
     {
         try
         {
-            var dlg = new Microsoft.Win32.OpenFolderDialog
+            // 用统一的 FolderPicker（见 DECISIONS 坑 49：
+            // 各工具自己 new OpenFolderDialog 会导致"这个能用那个不能用"）
+            if (FolderPicker.TryPick(this, "选择要打包的文件夹", null, out var folder, out var error))
             {
-                Title = "选择要打包的文件夹",
-            };
-
-            if (dlg.ShowDialog(this) == true)
+                AddSources(new[] { folder });
+            }
+            else if (error is not null)
             {
-                AddSources(new[] { dlg.FolderName });
+                SetStatus($"选择文件夹失败：{error}", isError: true);
             }
         }
         catch (Exception ex)
         {
             Log.Exception("选择文件夹失败", ex);
+            SetStatus($"选择文件夹出错：{ex.Message}", isError: true);
         }
     }
 
@@ -313,20 +315,20 @@ internal sealed partial class ArchiveWindow : Window
     {
         try
         {
-            var dlg = new Microsoft.Win32.OpenFolderDialog
+            if (FolderPicker.TryPick(this, "选择压缩包存放目录", OutputDirBox.Text.Trim(),
+                    out var dir, out var error))
             {
-                Title = "选择压缩包存放目录",
-                InitialDirectory = Directory.Exists(OutputDirBox.Text.Trim()) ? OutputDirBox.Text.Trim() : "",
-            };
-
-            if (dlg.ShowDialog(this) == true)
+                OutputDirBox.Text = dir;
+            }
+            else if (error is not null)
             {
-                OutputDirBox.Text = dlg.FolderName;
+                SetStatus($"选择目录失败：{error}", isError: true);
             }
         }
         catch (Exception ex)
         {
             Log.Exception("选择输出目录失败", ex);
+            SetStatus($"选择目录出错：{ex.Message}", isError: true);
         }
     }
 

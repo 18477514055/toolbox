@@ -122,19 +122,22 @@ internal sealed partial class ConvertWindow : Window
 
     private void AddFolder()
     {
-        var dlg = new Microsoft.Win32.OpenFolderDialog
+        // 同样改用统一的 FolderPicker（理由见 PickOutputDir 的注释）
+        if (!FolderPicker.TryPick(this, "选择文件夹（只加入这一层里的文件）", null, out var folder, out var error))
         {
-            Title = "选择文件夹（只加入这一层里的文件）",
-        };
+            if (error is not null)
+            {
+                MessageBox.Show(this, error, "选择文件夹", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
 
-        if (dlg.ShowDialog(this) != true)
-        {
             return;
         }
 
+        var dlgFolderName = folder;
+
         try
         {
-            var files = Directory.GetFiles(dlg.FolderName)
+            var files = Directory.GetFiles(dlgFolderName)
                 .Where(Formats.IsSupported)
                 .ToArray();
 
@@ -265,10 +268,35 @@ internal sealed partial class ConvertWindow : Window
 
     private void PickOutputDir()
     {
-        var dlg = new Microsoft.Win32.OpenFolderDialog { Title = "选择输出目录" };
-        if (dlg.ShowDialog(this) == true)
+        // 先记一行 —— 排查"点了没反应"时，**有没有走到这里**是第一分水岭：
+        //   · 没这行 ⇒ 点击根本没送到按钮上（被遮挡 / 事件没接上）
+        //   · 有这行但没对话框 ⇒ 对话框本身弹不出来
+        // 缺了这条日志，两种情况在用户眼里都只是"没反应"（实测教训，见 DECISIONS 坑 49）。
+        Log.Line($"「选择输出目录」按钮被点击（当前值：「{OutputDirBox.Text}」）");
+
+        // ★ 用统一的 FolderPicker，而不是直接 new OpenFolderDialog。
+        //
+        //   为什么（实测故障）：原来直接用 WPF 的 OpenFolderDialog，
+        //   用户实测**点了没反应**；而设置页用的是 WinForms 的
+        //   FolderBrowserDialog，那个能用。两者底层不同，
+        //   在单文件自包含发布下表现也不同。
+        //   FolderPicker 会优先用能用的那个，失败还给出原因 —— 不再静默。
+        if (FolderPicker.TryPick(this, "选择输出目录", OutputDirBox.Text, out var dir, out var error))
         {
-            OutputDirBox.Text = dlg.FolderName;
+            OutputDirBox.Text = dir;
+            Log.Line($"输出目录已改为：{dir}");
+            return;
+        }
+
+        // 失败时**必须告诉用户**：静默无反应是最糟的失败方式
+        if (error is not null)
+        {
+            Log.Error($"文件夹对话框失败：{error}");
+            MessageBox.Show(this, error, "选择目录", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        else
+        {
+            Log.Line("用户取消了选择目录。");
         }
     }
 

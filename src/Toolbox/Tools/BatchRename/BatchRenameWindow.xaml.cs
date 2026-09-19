@@ -77,21 +77,21 @@ internal sealed partial class BatchRenameWindow : Window
     {
         try
         {
-            var dlg = new Microsoft.Win32.OpenFolderDialog
+            if (FolderPicker.TryPick(this, "选择要批量改名的文件夹", DirBox.Text.Trim(),
+                    out var dir, out var error))
             {
-                Title = "选择要批量改名的文件夹",
-                InitialDirectory = Directory.Exists(DirBox.Text.Trim()) ? DirBox.Text.Trim() : "",
-            };
-
-            if (dlg.ShowDialog(this) == true)
+                DirBox.Text = dir;
+                LoadDirectory(dir);
+            }
+            else if (error is not null)
             {
-                DirBox.Text = dlg.FolderName;
-                LoadDirectory(dlg.FolderName);
+                SummaryText.Text = $"选择目录失败：{error}";
             }
         }
         catch (Exception ex)
         {
             Log.Exception("选择目录失败", ex);
+            SummaryText.Text = $"选择目录出错：{ex.Message}";
         }
     }
 

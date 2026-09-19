@@ -94,6 +94,37 @@
 
     <Compile Include="..\Toolbox\Tools\Convert\FileNaming.cs"    Link="Tools\FileNaming.cs" />
 
+    <!--
+      ★ 两个**跨工具共享**的部件（B 阶段搬入）。
+      
+      为什么它们必须在契约里而不是留在各自工具目录：
+        · ScreenCapture   —— Ocr 与 QrCode 都要"抓整屏"（复用截图那套 GDI 抓屏，
+                             不重写）。留在 Screenshot 目录里的话，
+                             Ocr/QrCode 插件就得引用 Screenshot 插件 ——
+                             插件之间互相依赖会让"按需下载"变成一场噩梦
+                             （装一个要连带装一串）。
+        · OcrRegionWindow —— QrCode 的"扫描屏幕二维码"复用了 OCR 的框选层。
+                             同理，放进契约让两者都能用。
+      
+      ⇒ 判据：**被两个以上工具共用的**，就放契约；只有一个工具用的，跟着那个工具走。
+    -->
+    <Compile Include="..\Toolbox\Tools\Screenshot\ScreenCapture.cs"
+             Link="Tools\Shared\ScreenCapture.cs" />
+    <Compile Include="..\Toolbox\Tools\Ocr\OcrRegionWindow.xaml.cs"
+             Link="Tools\Shared\OcrRegionWindow.xaml.cs" />
+  </ItemGroup>
+
+  <!--
+    XAML 必须用 <Page> 才会被编译成 BAML 并生成对应的 g.cs（InitializeComponent）。
+    只链 .cs 是不够的 —— 那样 partial 的另一半（InitializeComponent 的定义）不存在。
+  -->
+  <ItemGroup>
+    <Page Include="..\Toolbox\Tools\Ocr\OcrRegionWindow.xaml">
+      <Link>Tools\Shared\OcrRegionWindow.xaml</Link>
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+
     <!-- PluginContracts.cs 在本目录里，SDK 会自动包含，不用显式写 -->
   </ItemGroup>
 

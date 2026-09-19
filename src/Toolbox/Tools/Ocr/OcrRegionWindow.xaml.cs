@@ -15,7 +15,7 @@ namespace Toolbox.Tools.Ocr;
 ///     （按显示器真实 DPI，多屏混合 DPI 也不偏）；
 ///   · 极小选区视为误触，直接忽略，不送去做无意义的 OCR。
 /// </summary>
-internal sealed partial class OcrRegionWindow : Window
+public sealed partial class OcrRegionWindow : Window
 {
     private readonly ToolboxContext _ctx;
     private readonly BitmapSource _full;

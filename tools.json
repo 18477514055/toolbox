@@ -69,11 +69,11 @@
                       "Description":  "框选屏幕区域，识别文字并复制",
                       "Glyph":  "字",
                       "DefaultHotKey":  "Win+Alt+T",
-                      "BuiltIn":  true,
-                      "Version":  "",
-                      "AssetName":  "",
-                      "Sha256":  "",
-                      "Size":  0
+                      "BuiltIn":  false,
+                      "Version":  "1.0.0",
+                      "AssetName":  "Toolbox-Plugin-ocr-v1.0.0.zip",
+                      "Sha256":  "9751711DCD194836F505E9B05FE09FABB16A68DDF57E75EA929966F4A870FB01",
+                      "Size":  15467
                   },
                   {
                       "Id":  "rename",
@@ -81,11 +81,11 @@
                       "Description":  "按规则批量改名（可预览、可撤销）",
                       "Glyph":  "改",
                       "DefaultHotKey":  "Win+Alt+R",
-                      "BuiltIn":  true,
-                      "Version":  "",
-                      "AssetName":  "",
-                      "Sha256":  "",
-                      "Size":  0
+                      "BuiltIn":  false,
+                      "Version":  "1.0.0",
+                      "AssetName":  "Toolbox-Plugin-rename-v1.0.0.zip",
+                      "Sha256":  "F484917A49A27E4B97C43750DEC94A61286A710F140EBFE27F3FB3E8671B56CD",
+                      "Size":  15216
                   },
                   {
                       "Id":  "hash",
@@ -93,11 +93,11 @@
                       "Description":  "算 MD5 / SHA256，比对文件是否一致",
                       "Glyph":  "#",
                       "DefaultHotKey":  "Win+Alt+H",
-                      "BuiltIn":  true,
-                      "Version":  "",
-                      "AssetName":  "",
-                      "Sha256":  "",
-                      "Size":  0
+                      "BuiltIn":  false,
+                      "Version":  "1.0.0",
+                      "AssetName":  "Toolbox-Plugin-hash-v1.0.0.zip",
+                      "Sha256":  "F0215C059F9A6CBC4E21FDA2805B803DC88B7C5B24FED0259601961B16B34579",
+                      "Size":  15327
                   },
                   {
                       "Id":  "qrcode",
@@ -105,11 +105,11 @@
                       "Description":  "生成 / 扫描二维码",
                       "Glyph":  "▩",
                       "DefaultHotKey":  "Win+Alt+Q",
-                      "BuiltIn":  true,
-                      "Version":  "",
-                      "AssetName":  "",
-                      "Sha256":  "",
-                      "Size":  0
+                      "BuiltIn":  false,
+                      "Version":  "1.0.0",
+                      "AssetName":  "Toolbox-Plugin-qrcode-v1.0.0.zip",
+                      "Sha256":  "7BEDB44EC4B3D7986E763429228C41C19825C495BBDB1B3992A6198BA80F3184",
+                      "Size":  26065
                   },
                   {
                       "Id":  "topmost",
@@ -119,9 +119,9 @@
                       "DefaultHotKey":  "Win+Alt+P",
                       "BuiltIn":  false,
                       "Version":  "1.0.0",
-                      "AssetName":  "Toolbox-Plugin-WindowTopmost-v1.0.0.zip",
-                      "Sha256":  "2288C5F873324DFAAA175CAF680555D407BFAD0C01AC4EC201CE8C9FBCA4FDCA",
-                      "Size":  4315
+                      "AssetName":  "Toolbox-Plugin-topmost-v1.0.0.zip",
+                      "Sha256":  "C5DB2BF82CB6CBCC49225C67BA6E3912B285E6DA41374B976980AE1ECF4E6CC8",
+                      "Size":  4319
                   },
                   {
                       "Id":  "run",
@@ -129,11 +129,11 @@
                       "Description":  "输入命令交给 cmd / PowerShell",
                       "Glyph":  "\u003e_",
                       "DefaultHotKey":  "Win+Alt+X",
-                      "BuiltIn":  true,
-                      "Version":  "",
-                      "AssetName":  "",
-                      "Sha256":  "",
-                      "Size":  0,
+                      "BuiltIn":  false,
+                      "Version":  "1.0.0",
+                      "AssetName":  "Toolbox-Plugin-run-v1.0.0.zip",
+                      "Sha256":  "8A40BD0C32E293BE1428FCFCA51017A11DCA65D27259730770BE1A61838787E0",
+                      "Size":  13839,
                       "Requires":  "会以你的身份真实执行命令"
                   },
                   {
@@ -142,11 +142,11 @@
                       "Description":  "打包成 zip / rar",
                       "Glyph":  "🗜",
                       "DefaultHotKey":  "Win+Alt+G",
-                      "BuiltIn":  true,
-                      "Version":  "",
-                      "AssetName":  "",
-                      "Sha256":  "",
-                      "Size":  0,
+                      "BuiltIn":  false,
+                      "Version":  "1.0.0",
+                      "AssetName":  "Toolbox-Plugin-archive-v1.0.0.zip",
+                      "Sha256":  "AFF1A142D4817CC716A30F9E6B1ABE5AE068F922D2123D5FA699AEF8F0550F54",
+                      "Size":  18726,
                       "Requires":  "rar 格式需要装 WinRAR"
                   }
               ]

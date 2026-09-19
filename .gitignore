@@ -30,3 +30,7 @@ plugins-src/**/obj/
 # 探针工程里的构建产物（含单文件发布的成品）
 artifacts/**/single/
 artifacts/**/plugins/
+
+# 临时提交/发布说明
+.commit-msg.txt
+.release-notes.md

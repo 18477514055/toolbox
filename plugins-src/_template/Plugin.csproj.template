@@ -1,0 +1,71 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ═══════════════════════════════════════════════════════════════════
+     工具插件工程模板（B 阶段）
+    ═══════════════════════════════════════════════════════════════════
+
+    每个工具一个这样的工程。四处要改的都用 __XXX__ 占位：
+      __ID__        工具 Id（与 IToolboxTool.Id、tools.json 一致）
+      __NAME__      显示名
+      __CLASS__     实现类的文件名（如 OcrTool）
+      __TOOLDIR__   工具源码目录名（如 Ocr）
+
+    ⚠️ 三条必须照抄的地方（缺一个插件就起不来，见 DECISIONS 坑 39）：
+      ① 引用 Toolbox.Contracts 且 Private=false + ExcludeAssets=runtime
+         —— 契约由主程序提供，插件绝不能自带一份，否则类型身份会被破坏
+      ② TargetFramework / UseWPF 必须与主程序一致
+      ③ 业务源码用 <Compile Include Link> **链接**主程序那份，绝不复制
+         —— 保证插件与主程序永远同一份实现，不会分叉
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <AssemblyName>Toolbox.Plugin.__ID__</AssemblyName>
+    <RootNamespace>Toolbox.Tools.__TOOLDIR__</RootNamespace>
+
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+
+    <!-- 插件要被主程序按文件加载，不能做成单文件 -->
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+
+    <Version>1.0.0</Version>
+    <NoWarn>$(NoWarn);CA1416;WFO0003</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 契约引用：不复制到输出（由主程序提供） -->
+    <ProjectReference Include="..\..\src\Toolbox.Contracts\Toolbox.Contracts.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      业务实现**链接**主程序那份（不是复制）。
+      Include 整个目录，新增文件不用改这里。
+    -->
+    <Compile Include="..\..\src\Toolbox\Tools\__TOOLDIR__\*.cs" />
+    <Page Include="..\..\src\Toolbox\Tools\__TOOLDIR__\*.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+  </ItemGroup>
+
+</Project>

@@ -148,6 +148,15 @@
     <Compile Remove="Shell\BusyState.cs" />
 
     <Compile Remove="Tools\Convert\FileNaming.cs" />
+
+    <!--
+      B 阶段：两个**跨工具共享**的部件已移入契约程序集
+      （判据见 Contracts 工程里的说明：被两个以上工具共用的就放契约）。
+      主程序里排除掉，避免"同一类型定义两次"（CS0101）。
+    -->
+    <Compile Remove="Tools\Screenshot\ScreenCapture.cs" />
+    <Compile Remove="Tools\Ocr\OcrRegionWindow.xaml.cs" />
+    <Page Remove="Tools\Ocr\OcrRegionWindow.xaml" />
   </ItemGroup>
 
 </Project>

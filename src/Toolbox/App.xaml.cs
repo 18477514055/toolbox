@@ -184,18 +184,26 @@ internal partial class App : Application
         _hotKeys.HotKeyPressed += OnHotKeyPressed;
 
         // ---------- 工具注册 ----------
+        //
+        // ⚠️ 只有这 5 个是**随主程序内置**的 —— 正好是 ToolGate 里默认开启的那 5 个。
+        //
+        // 为什么是这 5 个（而不是全部、也不是只留剪贴板）：
+        //   · 主程序开箱就得能用 —— 装完发现一个工具都没有，第一印象太差；
+        //   · 剪贴板是**托盘与悬浮窗的支点**（悬浮窗用它取历史、托盘菜单以它为主），
+        //     它若也是插件，不装插件时的行为会变得很别扭；
+        //   · 这 5 个恰好覆盖"几乎每天都会用"的那一类。
+        //
+        // 其余 7 个（OCR / 重命名 / 哈希 / 二维码 / 窗口置顶 / 运行命令 / 批量打包）
+        // 已拆成**可下载插件**，见下方 LoadPlugins()。
+        // 它们的源码仍在 src\Toolbox\Tools\<名>\ ——
+        // 由 plugins-src\ 下对应的插件工程用 <Compile Include Link> **共享同一份**，
+        // 所以主程序不编译它们，也不会产生两份实现。
         _registry = new ToolRegistry();
         _registry.Add(new ClipboardTool());
         _registry.Add(new ImageCropTool());
         _registry.Add(new ConvertTool());
         _registry.Add(new AiTool());
         _registry.Add(new ScreenshotTool());
-        _registry.Add(new OcrTool());
-        _registry.Add(new BatchRenameTool());
-        _registry.Add(new HashCheckTool());
-        _registry.Add(new QrTool());
-        _registry.Add(new CommandRunnerTool());
-        _registry.Add(new ArchiveTool());
 
         // ⚠️ 注意：`WindowTopmostTool` **不再在这里注册**了。
         //
@@ -787,6 +795,32 @@ internal partial class App : Application
 
         // auto 写进来的条目不算"用户改过" ⇒ 先按默认键试，默认键不行再降级。
         var isCustom = hasEntry && custom.Length > 0 && !isAuto;
+
+        // ★ 再收一道：**值恰好等于默认键**的条目也不算"用户改过"。
+        //
+        //   为什么（实测抓到的真问题）：
+        //     设置窗口保存时，只要框里有内容就一律标成 Origins="user"。
+        //     而用户完全可能（或历史上某次操作）把框里的值**原样保存**一遍 ——
+        //     值就是工具自带的默认键，却被打上了"用户亲手指定"的标记。
+        //
+        //     后果：这个键一旦被别的程序占用，按设计"用户指定的键被占用时
+        //     只报错、不自动换" —— 于是**工具悄悄失去热键**，
+        //     而用户从没主动这么设过，界面上也看不出问题。
+        //
+        //   判据很干净：值与默认键相同 ⇒ 语义上就是"没改过" ⇒ 清掉标记、走默认+降级。
+        var isSameAsDefault = isCustom
+                              && !string.IsNullOrWhiteSpace(defaultSpec)
+                              && string.Equals(custom, defaultSpec.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        if (isSameAsDefault)
+        {
+            _settingsStore.Current.HotKeys.Remove(fullId);
+            _settingsStore.Current.HotKeyOrigins.Remove(fullId);
+            _settingsStore.Save();
+            Log.Line($"热键条目与默认键相同，已按「未改过」处理：{fullId} → {defaultSpec}（可继续自动降级）");
+            isCustom = false;
+        }
+
         var spec = isCustom ? custom : defaultSpec;
 
         if (string.IsNullOrWhiteSpace(spec))

@@ -18,7 +18,7 @@ namespace Toolbox.Tools.Screenshot;
 ///   这也是 Win+Shift+S / 微信截图 这些主流工具的做法。代价只是少截到「正在播放的视频帧」，
 ///   对截图工具完全可接受。
 /// </summary>
-internal static class ScreenCapture
+public static class ScreenCapture
 {
     /// <summary>捕获整块虚拟屏幕。失败（拿不到 DC / BitBlt 失败）返回 null。</summary>
     public static BitmapSource? CaptureFullScreen()

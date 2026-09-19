@@ -1059,6 +1059,54 @@ internal static class SelfTest
         {
             Add("热键降级链：跨工具无冲突（且不抢别人的默认键）", false, ex.Message);
         }
+
+        // ---- ★ 值等于默认键的条目不能挡住自动降级 ----
+        //
+        // 这条防的是一个**实测抓到的真问题**：
+        //   设置窗口保存时，只要框里有内容就标 Origins="user"。
+        //   用户完全可能把框里的默认值**原样保存**一遍 —— 值就是默认键，
+        //   却被打上"用户亲手指定"的标记。
+        //   于是那个键被别的程序占用时，按"用户指定的键不自动换"的规则，
+        //   工具就**悄悄失去热键**了，而用户从没主动这么设过。
+        //
+        //   修法：值与默认键相同 ⇒ 语义就是"没改过" ⇒ 清标记、继续走降级链。
+        try
+        {
+            var reg = BuildFullRegistry();
+
+            // 拿一个真工具，把它的热键设成"与默认键相同"，标记成 user
+            var tool = reg.Tools.First(t => t.Id == "ocr");
+            var defaultSpec = tool.DefaultHotKey;
+
+            var s = new Settings();
+            s.HotKeys["ocr"] = defaultSpec;          // 值 == 默认键
+            s.HotKeyOrigins["ocr"] = "user";          // 却被标成用户设的
+
+            // 复刻 App.RegisterOne 里的判定逻辑
+            var hasEntry = s.HotKeys.TryGetValue("ocr", out var configured);
+            var custom = configured?.Trim() ?? "";
+            var isAuto = string.Equals(
+                s.HotKeyOrigins.TryGetValue("ocr", out var o) ? o : null,
+                "auto", StringComparison.OrdinalIgnoreCase);
+
+            var isCustom = hasEntry && custom.Length > 0 && !isAuto;
+            var isSameAsDefault = isCustom
+                                  && !string.IsNullOrWhiteSpace(defaultSpec)
+                                  && string.Equals(custom, defaultSpec.Trim(),
+                                      StringComparison.OrdinalIgnoreCase);
+
+            var ok = isSameAsDefault;
+
+            Add("热键：值等于默认键时不锁死降级（防「悄悄失去热键」）", ok,
+                ok
+                    ? $"「{tool.Name}」的热键设为默认值 {defaultSpec} 且标成 user 时，"
+                      + "仍被判定为「未改过」⇒ 可继续自动降级"
+                    : "★ 这种条目会被当成用户自定义，占用后不会降级 ⇒ 工具会静默失去热键");
+        }
+        catch (Exception ex)
+        {
+            Add("热键：值等于默认键时不锁死降级（防「悄悄失去热键」）", false, ex.Message);
+        }
     }
 
     // ---------------------------------------------------------------- 批量打包
@@ -1700,10 +1748,40 @@ internal static class SelfTest
             {
                 var text = File.ReadAllText(csproj, System.Text.Encoding.UTF8);
 
+                // ★ 按**源码目录**判断，而不是按文件名。
+                //
+                //   为什么（实测踩到）：插件工程的包含写法有两种 ——
+                //     逐文件：<Compile Include="..\...\WindowTopmostTool.cs" />
+                //     整目录：<Compile Include="..\...\Ocr\*.cs" />
+                //   早先只按 `XxxTool.cs` 正则匹配，**第二种写法完全匹配不到**，
+                //   于是 6 个明明已经是插件的工具被误报成"忘了接线"。
+                //
+                //   改成提取 `Tools\<目录名>\` 再去该目录里找 *Tool.cs ——
+                //   两种写法都能覆盖，也更贴近"这个目录被做成了插件"这个事实。
                 foreach (System.Text.RegularExpressions.Match m in
-                         System.Text.RegularExpressions.Regex.Matches(text, @"([A-Za-z0-9_]+Tool)\.cs"))
+                         System.Text.RegularExpressions.Regex.Matches(
+                             text, @"Tools\\([A-Za-z0-9_]+)\\[^""]*"))
                 {
-                    names.Add(m.Groups[1].Value);
+                    var toolDirName = m.Groups[1].Value;
+
+                    try
+                    {
+                        var toolDir = Path.Combine(projectRoot, "src", "Toolbox", "Tools", toolDirName);
+
+                        if (!Directory.Exists(toolDir))
+                        {
+                            continue;
+                        }
+
+                        foreach (var cs in Directory.GetFiles(toolDir, "*Tool.cs"))
+                        {
+                            names.Add(Path.GetFileNameWithoutExtension(cs));
+                        }
+                    }
+                    catch
+                    {
+                        // 单个目录读不到就跳过，不影响其它插件
+                    }
                 }
             }
         }
@@ -1941,7 +2019,6 @@ internal static class SelfTest
     }
 
     // ---------------------------------------------------------------- 插件机制
-
     /// <summary>
     /// B 阶段插件机制的用例。
     ///
